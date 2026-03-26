@@ -141,6 +141,21 @@ public class ShoppingList extends AggregateRoot {
         return item;
     }
 
+    public ShoppingListItem toggleItemClaim(UUID itemId, ActorDisplayName actorDisplayName, Clock clock) {
+        ensureActive();
+        ShoppingListItem item = getItem(itemId);
+        boolean claimed = item.toggleClaim(actorDisplayName, clock);
+        touch(actorDisplayName, clock);
+        recordEvent(new ShoppingDomainEvent(
+                claimed ? "shopping-list-item.claimed" : "shopping-list-item.claim-released",
+                id,
+                itemId,
+                actorDisplayName.value(),
+                updatedAt
+        ));
+        return item;
+    }
+
     public void decreaseItemQuantity(UUID itemId, ActorDisplayName actorDisplayName, Clock clock) {
         ensureActive();
         ShoppingListItem item = getItem(itemId);

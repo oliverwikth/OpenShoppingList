@@ -70,6 +70,13 @@ export function uncheckItem(actorName: string, listId: string, itemId: string) {
   })
 }
 
+export function toggleItemClaim(actorName: string, listId: string, itemId: string) {
+  return apiRequest<ShoppingListItem>(`/api/lists/${listId}/items/${itemId}/claim`, {
+    method: 'POST',
+    actorName,
+  })
+}
+
 export function decrementItem(actorName: string, listId: string, itemId: string) {
   return apiRequest<void>(`/api/lists/${listId}/items/${itemId}/decrement`, {
     method: 'POST',

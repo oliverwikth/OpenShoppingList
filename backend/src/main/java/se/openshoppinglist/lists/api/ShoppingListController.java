@@ -145,6 +145,19 @@ public class ShoppingListController {
         ));
     }
 
+    @PostMapping("/{listId}/items/{itemId}/claim")
+    ShoppingListViews.ShoppingListItemView toggleItemClaim(
+            @PathVariable UUID listId,
+            @PathVariable UUID itemId,
+            HttpServletRequest request
+    ) {
+        return shoppingListQueryService.toItemView(shoppingListCommandService.toggleItemClaim(
+                listId,
+                itemId,
+                actorContextResolver.resolve(request)
+        ));
+    }
+
     @PostMapping("/{listId}/items/{itemId}/decrement")
     void decrementItem(
             @PathVariable UUID listId,

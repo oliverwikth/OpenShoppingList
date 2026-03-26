@@ -165,6 +165,58 @@ class ShoppingListApiIntegrationTest extends PostgresIntegrationTest {
                 .andExpect(jsonPath("$.name").value("Helgmiddag"));
     }
 
+    @Test
+    void togglesItemClaimAndPersistsCollaboratorAttribution() throws Exception {
+        MvcResult createListResult = mockMvc.perform(post("/api/lists")
+                        .header(ActorDisplayName.HEADER_NAME, "anna")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Veckohandling"}
+                                """))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        String listId = readId(createListResult);
+
+        mockMvc.perform(post("/api/lists/{listId}/items/manual", listId)
+                        .header(ActorDisplayName.HEADER_NAME, "anna")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"title":"Bröd","note":""}
+                                """))
+                .andExpect(status().isOk());
+
+        MvcResult listDetails = mockMvc.perform(get("/api/lists/{listId}", listId))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        String itemId = objectMapper.readTree(listDetails.getResponse().getContentAsString())
+                .path("items")
+                .path(0)
+                .path("id")
+                .asText();
+
+        mockMvc.perform(post("/api/lists/{listId}/items/{itemId}/claim", listId, itemId)
+                        .header(ActorDisplayName.HEADER_NAME, "olle"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.claimedByDisplayName").value("olle"));
+
+        mockMvc.perform(get("/api/lists/{listId}", listId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].claimedByDisplayName").value("olle"))
+                .andExpect(jsonPath("$.recentActivities[0].eventType").value("shopping-list-item.claimed"));
+
+        mockMvc.perform(post("/api/lists/{listId}/items/{itemId}/claim", listId, itemId)
+                        .header(ActorDisplayName.HEADER_NAME, "olle"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.claimedByDisplayName").doesNotExist());
+
+        mockMvc.perform(get("/api/lists/{listId}", listId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].claimedByDisplayName").doesNotExist())
+                .andExpect(jsonPath("$.recentActivities[0].eventType").value("shopping-list-item.claim-released"));
+    }
+
     private String readId(MvcResult result) throws Exception {
         JsonNode json = objectMapper.readTree(result.getResponse().getContentAsString());
         return json.path("id").asText();

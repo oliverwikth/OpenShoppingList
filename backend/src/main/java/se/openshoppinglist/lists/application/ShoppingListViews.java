@@ -42,6 +42,8 @@ public final class ShoppingListViews {
             boolean checked,
             Instant checkedAt,
             String checkedByDisplayName,
+            Instant claimedAt,
+            String claimedByDisplayName,
             String lastModifiedByDisplayName,
             Instant createdAt,
             Instant updatedAt,

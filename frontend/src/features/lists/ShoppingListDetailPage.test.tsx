@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { AppShell } from '../../app/AppShell'
@@ -212,6 +212,124 @@ describe('ShoppingListDetailPage', () => {
 
     expect(await screen.findByText('Veckohandling')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '←' })).toHaveAttribute('href', '/anna/lists/list-1/varor')
+  })
+
+  it('claims an unchecked checklist item when swiped left', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          ...initialList,
+          items: [
+            {
+              id: 'item-1',
+              itemType: 'MANUAL',
+              title: 'Tomater',
+              checked: false,
+              checkedAt: null,
+              checkedByDisplayName: null,
+              claimedAt: null,
+              claimedByDisplayName: null,
+              lastModifiedByDisplayName: 'anna',
+              createdAt: '2026-03-26T18:05:00Z',
+              updatedAt: '2026-03-26T18:05:00Z',
+              position: 1,
+              quantity: 1,
+              manualNote: '',
+              externalSnapshot: null,
+            },
+          ],
+          recentActivities: [],
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+    )
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          id: 'item-1',
+          itemType: 'MANUAL',
+          title: 'Tomater',
+          checked: false,
+          checkedAt: null,
+          checkedByDisplayName: null,
+          claimedAt: '2026-03-26T18:06:00Z',
+          claimedByDisplayName: 'anna',
+          lastModifiedByDisplayName: 'anna',
+          createdAt: '2026-03-26T18:05:00Z',
+          updatedAt: '2026-03-26T18:06:00Z',
+          position: 1,
+          quantity: 1,
+          manualNote: '',
+          externalSnapshot: null,
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+    )
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          ...initialList,
+          items: [
+            {
+              id: 'item-1',
+              itemType: 'MANUAL',
+              title: 'Tomater',
+              checked: false,
+              checkedAt: null,
+              checkedByDisplayName: null,
+              claimedAt: '2026-03-26T18:06:00Z',
+              claimedByDisplayName: 'anna',
+              lastModifiedByDisplayName: 'anna',
+              createdAt: '2026-03-26T18:05:00Z',
+              updatedAt: '2026-03-26T18:06:00Z',
+              position: 1,
+              quantity: 1,
+              manualNote: '',
+              externalSnapshot: null,
+            },
+          ],
+          recentActivities: [],
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+    )
+
+    render(
+      <MemoryRouter initialEntries={['/anna/lists/list-1/checklista']}>
+        <AppShell />
+      </MemoryRouter>,
+    )
+
+    const article = (await screen.findByText('Tomater')).closest('article')
+    expect(article).not.toBeNull()
+
+    fireEvent.pointerDown(article!, { clientX: 220 })
+    fireEvent.pointerMove(article!, { clientX: 110 })
+    fireEvent.pointerUp(article!, { clientX: 110 })
+
+    expect(await screen.findByText('anna hämtar')).toBeInTheDocument()
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/lists/list-1/items/item-1/claim',
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({
+            'X-Actor-Display-Name': 'anna',
+          }),
+        }),
+      )
+    })
   })
 
   it('increments and decrements an item from the varor view', async () => {

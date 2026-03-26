@@ -88,6 +88,14 @@ public class ShoppingListCommandService {
     }
 
     @Transactional
+    public ShoppingListItem toggleItemClaim(UUID listId, UUID itemId, ActorDisplayName actorDisplayName) {
+        ShoppingList shoppingList = requireList(listId);
+        ShoppingListItem item = shoppingList.toggleItemClaim(itemId, actorDisplayName, clock);
+        persistAndPublish(shoppingList);
+        return item;
+    }
+
+    @Transactional
     public void decreaseItemQuantity(UUID listId, UUID itemId, ActorDisplayName actorDisplayName) {
         ShoppingList shoppingList = requireList(listId);
         shoppingList.decreaseItemQuantity(itemId, actorDisplayName, clock);

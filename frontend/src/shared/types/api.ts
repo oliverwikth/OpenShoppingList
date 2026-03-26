@@ -28,6 +28,8 @@ export interface ShoppingListItem {
   checked: boolean
   checkedAt: string | null
   checkedByDisplayName: string | null
+  claimedAt: string | null
+  claimedByDisplayName: string | null
   lastModifiedByDisplayName: string
   createdAt: string
   updatedAt: string

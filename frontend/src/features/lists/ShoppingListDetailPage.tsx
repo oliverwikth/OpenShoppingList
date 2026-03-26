@@ -1,7 +1,8 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useActorName } from '../actor/useActorName'
-import { addExternalItem, addManualItem, checkItem, decrementItem, fetchList, uncheckItem } from './api'
+import { addExternalItem, addManualItem, checkItem, decrementItem, fetchList, toggleItemClaim, uncheckItem } from './api'
 import { searchRetailer } from '../retailer-search/api'
 import type {
   RetailerSearchResponse,
@@ -192,6 +193,20 @@ export function ShoppingListDetailPage() {
     }
   }
 
+  async function handleToggleClaim(item: ShoppingListItem) {
+    const actionKey = claimActionKey(item.id)
+    setPendingActionKey(actionKey)
+    setError(null)
+    try {
+      await toggleItemClaim(actorName, listId, item.id)
+      await loadList()
+    } catch (claimError) {
+      setError(claimError instanceof Error ? claimError.message : 'Kunde inte uppdatera hämtning.')
+    } finally {
+      setPendingActionKey(null)
+    }
+  }
+
   function switchView(view: Exclude<ViewMode, 'search'>) {
     navigate(viewPath(actorName, listId, view))
   }
@@ -361,26 +376,14 @@ export function ShoppingListDetailPage() {
                     <h2 className="checklist-section__title">{group.title}</h2>
                     <div className="checklist-list">
                       {group.items.map((item, index) => (
-                        <article className={`checklist-row checklist-row--minimal ${item.checked ? 'is-checked' : ''}`} key={item.id}>
-                          <button
-                            aria-label={item.checked ? `Avmarkera ${item.title}` : `Markera ${item.title}`}
-                            className={`square-check ${item.checked ? 'is-checked' : ''}`}
-                            disabled={pendingActionKey === item.id}
-                            onClick={() => void handleToggleItem(item)}
-                            type="button"
-                          >
-                            {item.checked ? '✓' : ''}
-                          </button>
-                          <div className="catalog-row__media">{renderItemMedia(item)}</div>
-                          <div className="catalog-row__content">
-                            <strong>{item.title}</strong>
-                            {itemSubtitle(item) ? <p>{itemSubtitle(item)}</p> : null}
-                          </div>
-                          <div className="catalog-row__aside">
-                            <span className="checklist-quantity">{formatQuantity(item.quantity)}</span>
-                          </div>
-                          {index < group.items.length - 1 ? <div className="checklist-row__divider" /> : null}
-                        </article>
+                        <ChecklistItemRow
+                          isBusy={pendingActionKey === item.id || pendingActionKey === claimActionKey(item.id)}
+                          item={item}
+                          key={item.id}
+                          onToggleCheck={handleToggleItem}
+                          onToggleClaim={handleToggleClaim}
+                          showDivider={index < group.items.length - 1}
+                        />
                       ))}
                     </div>
                   </section>
@@ -434,6 +437,118 @@ export function ShoppingListDetailPage() {
         ))}
       </nav>
     </main>
+  )
+}
+
+interface ChecklistItemRowProps {
+  isBusy: boolean
+  item: ShoppingListItem
+  onToggleCheck: (item: ShoppingListItem) => Promise<void>
+  onToggleClaim: (item: ShoppingListItem) => Promise<void>
+  showDivider: boolean
+}
+
+function ChecklistItemRow({ isBusy, item, onToggleCheck, onToggleClaim, showDivider }: ChecklistItemRowProps) {
+  const [swipeOffset, setSwipeOffset] = useState(0)
+  const swipeStartXRef = useRef<number | null>(null)
+  const isSwipingRef = useRef(false)
+
+  const claimStyle = useMemo(() => {
+    if (!item.claimedByDisplayName) {
+      return undefined
+    }
+    return claimPaletteStyle(item.claimedByDisplayName)
+  }, [item.claimedByDisplayName])
+
+  function handlePointerDown(event: ReactPointerEvent<HTMLElement>) {
+    if (isBusy || item.checked) {
+      return
+    }
+
+    const target = event.target
+    if (target instanceof HTMLElement && target.closest('button')) {
+      return
+    }
+
+    swipeStartXRef.current = event.clientX
+    isSwipingRef.current = false
+  }
+
+  function handlePointerMove(event: ReactPointerEvent<HTMLElement>) {
+    if (swipeStartXRef.current === null) {
+      return
+    }
+
+    const deltaX = event.clientX - swipeStartXRef.current
+    if (deltaX < -6) {
+      isSwipingRef.current = true
+    }
+
+    if (!isSwipingRef.current) {
+      return
+    }
+
+    setSwipeOffset(Math.max(deltaX, -92))
+  }
+
+  function handlePointerLeave() {
+    if (swipeStartXRef.current === null) {
+      return
+    }
+
+    swipeStartXRef.current = null
+    isSwipingRef.current = false
+    setSwipeOffset(0)
+  }
+
+  async function handlePointerUp(event: ReactPointerEvent<HTMLElement>) {
+    if (swipeStartXRef.current === null) {
+      return
+    }
+
+    const deltaX = event.clientX - swipeStartXRef.current
+    swipeStartXRef.current = null
+    const shouldToggleClaim = deltaX <= -72
+    isSwipingRef.current = false
+    setSwipeOffset(0)
+
+    if (shouldToggleClaim) {
+      await onToggleClaim(item)
+    }
+  }
+
+  return (
+    <article
+      className={`checklist-row checklist-row--minimal checklist-row--claimable ${item.claimedByDisplayName ? 'is-claimed' : ''}`}
+      style={{
+        ...(claimStyle ?? {}),
+        transform: swipeOffset ? `translateX(${swipeOffset}px)` : undefined,
+      }}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerLeave={handlePointerLeave}
+      onPointerUp={(event) => void handlePointerUp(event)}
+    >
+      <button
+        aria-label={item.checked ? `Avmarkera ${item.title}` : `Markera ${item.title}`}
+        className={`square-check ${item.checked ? 'is-checked' : ''}`}
+        disabled={isBusy}
+        onClick={() => void onToggleCheck(item)}
+        type="button"
+      >
+        {item.checked ? '✓' : ''}
+      </button>
+      <div className="catalog-row__media">{renderItemMedia(item)}</div>
+      <div className="catalog-row__content">
+        <strong>{item.title}</strong>
+        {itemSubtitle(item) ? <p>{itemSubtitle(item)}</p> : null}
+        {item.claimedByDisplayName ? <p className="claim-label">{item.claimedByDisplayName} hämtar</p> : null}
+      </div>
+      <div className="catalog-row__aside">
+        <span className="checklist-quantity">{formatQuantity(item.quantity)}</span>
+      </div>
+      {showDivider ? <div className="checklist-row__divider" /> : null}
+    </article>
   )
 }
 
@@ -542,6 +657,10 @@ function itemActionKey(item: ShoppingListItem) {
   return `item:${item.id}`
 }
 
+function claimActionKey(itemId: string) {
+  return `claim:${itemId}`
+}
+
 function toRetailerSearchResult(item: ShoppingListItem): RetailerSearchResult {
   if (!item.externalSnapshot) {
     throw new Error('External item is missing snapshot data.')
@@ -613,7 +732,7 @@ function itemSubtitle(item: ShoppingListItem) {
     return item.externalSnapshot.category
   }
 
-  return 'Delad hushallsrad'
+  return 'Delad hushållsrad'
 }
 
 function formatQuantity(quantity: number) {
@@ -664,4 +783,21 @@ function manualSearchKey(title: string) {
 
 function externalSearchKey(result: RetailerSearchResult) {
   return `external:${result.provider}:${result.articleId}`
+}
+
+function claimPaletteStyle(displayName: string): CSSProperties {
+  const hue = hashString(displayName) % 360
+  return {
+    '--claim-bg': `hsla(${hue}, 78%, 92%, 0.98)`,
+    '--claim-border': `hsla(${hue}, 48%, 48%, 0.45)`,
+    '--claim-text': `hsl(${hue}, 48%, 28%)`,
+  } as CSSProperties
+}
+
+function hashString(value: string) {
+  let hash = 0
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) >>> 0
+  }
+  return hash
 }

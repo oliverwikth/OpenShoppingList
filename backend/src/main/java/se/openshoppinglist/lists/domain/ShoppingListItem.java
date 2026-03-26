@@ -42,6 +42,12 @@ public class ShoppingListItem {
     @Column(name = "checked_by_display_name", length = 60)
     private String checkedByDisplayName;
 
+    @Column(name = "claimed_at")
+    private Instant claimedAt;
+
+    @Column(name = "claimed_by_display_name", length = 60)
+    private String claimedByDisplayName;
+
     @Column(name = "last_modified_by_display_name", nullable = false, length = 60)
     private String lastModifiedByDisplayName;
 
@@ -148,6 +154,7 @@ public class ShoppingListItem {
         if (checked) {
             return false;
         }
+        clearClaimState();
         checked = true;
         checkedAt = clock.instant();
         checkedByDisplayName = actorDisplayName.value();
@@ -188,6 +195,26 @@ public class ShoppingListItem {
         lastModifiedByDisplayName = actorDisplayName.value();
         updatedAt = clock.instant();
         return false;
+    }
+
+    boolean toggleClaim(ActorDisplayName actorDisplayName, Clock clock) {
+        if (checked) {
+            throw new IllegalStateException("Checked items cannot be claimed.");
+        }
+
+        Instant now = clock.instant();
+        if (actorDisplayName.value().equals(claimedByDisplayName)) {
+            clearClaimState();
+            lastModifiedByDisplayName = actorDisplayName.value();
+            updatedAt = now;
+            return false;
+        }
+
+        claimedAt = now;
+        claimedByDisplayName = actorDisplayName.value();
+        lastModifiedByDisplayName = actorDisplayName.value();
+        updatedAt = now;
+        return true;
     }
 
     boolean matchesManual(String title, String note) {
@@ -245,6 +272,14 @@ public class ShoppingListItem {
 
     public String getCheckedByDisplayName() {
         return checkedByDisplayName;
+    }
+
+    public Instant getClaimedAt() {
+        return claimedAt;
+    }
+
+    public String getClaimedByDisplayName() {
+        return claimedByDisplayName;
     }
 
     public String getLastModifiedByDisplayName() {
@@ -307,6 +342,11 @@ public class ShoppingListItem {
         checked = false;
         checkedAt = null;
         checkedByDisplayName = null;
+    }
+
+    private void clearClaimState() {
+        claimedAt = null;
+        claimedByDisplayName = null;
     }
 
     private static String normalizeTitle(String rawTitle) {

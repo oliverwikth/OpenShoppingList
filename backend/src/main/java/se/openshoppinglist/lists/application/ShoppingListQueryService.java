@@ -95,6 +95,8 @@ public class ShoppingListQueryService {
                 item.isChecked(),
                 item.getCheckedAt(),
                 item.getCheckedByDisplayName(),
+                item.getClaimedAt(),
+                item.getClaimedByDisplayName(),
                 item.getLastModifiedByDisplayName(),
                 item.getCreatedAt(),
                 item.getUpdatedAt(),
