@@ -1,0 +1,273 @@
+package se.openshoppinglist.lists.domain;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.UUID;
+import se.openshoppinglist.actor.ActorDisplayName;
+
+@Entity
+@Table(name = "shopping_list_item")
+public class ShoppingListItem {
+
+    @Id
+    private UUID id;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "list_id", nullable = false)
+    private ShoppingList shoppingList;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "item_type", nullable = false, length = 20)
+    private ShoppingListItemType itemType;
+
+    @Column(nullable = false)
+    private String title;
+
+    @Column(nullable = false)
+    private boolean checked;
+
+    @Column(name = "checked_at")
+    private Instant checkedAt;
+
+    @Column(name = "checked_by_display_name", length = 60)
+    private String checkedByDisplayName;
+
+    @Column(name = "last_modified_by_display_name", nullable = false, length = 60)
+    private String lastModifiedByDisplayName;
+
+    @Column(name = "created_at", nullable = false)
+    private Instant createdAt;
+
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
+
+    @Column(nullable = false)
+    private int position;
+
+    @Column(name = "manual_note")
+    private String manualNote;
+
+    @Column(name = "source_provider", length = 40)
+    private String sourceProvider;
+
+    @Column(name = "source_article_id", length = 120)
+    private String sourceArticleId;
+
+    @Column(name = "source_image_url")
+    private String sourceImageUrl;
+
+    @Column(name = "source_category", length = 120)
+    private String sourceCategory;
+
+    @Column(name = "source_price_amount", precision = 10, scale = 2)
+    private BigDecimal sourcePriceAmount;
+
+    @Column(name = "source_currency", length = 3)
+    private String sourceCurrency;
+
+    @Column(name = "source_subtitle")
+    private String sourceSubtitle;
+
+    @Column(name = "source_payload_json", nullable = false)
+    private String sourcePayloadJson;
+
+    protected ShoppingListItem() {
+    }
+
+    static ShoppingListItem manual(
+            ShoppingList shoppingList,
+            int position,
+            String title,
+            String note,
+            ActorDisplayName actorDisplayName,
+            Clock clock
+    ) {
+        Instant now = clock.instant();
+        ShoppingListItem item = new ShoppingListItem();
+        item.id = UUID.randomUUID();
+        item.shoppingList = shoppingList;
+        item.itemType = ShoppingListItemType.MANUAL;
+        item.title = normalizeTitle(title);
+        item.manualNote = note == null || note.isBlank() ? null : note.trim();
+        item.checked = false;
+        item.lastModifiedByDisplayName = actorDisplayName.value();
+        item.createdAt = now;
+        item.updatedAt = now;
+        item.position = position;
+        item.sourcePayloadJson = "{}";
+        return item;
+    }
+
+    static ShoppingListItem external(
+            ShoppingList shoppingList,
+            int position,
+            ExternalArticleSnapshot snapshot,
+            ActorDisplayName actorDisplayName,
+            Clock clock
+    ) {
+        Instant now = clock.instant();
+        ShoppingListItem item = new ShoppingListItem();
+        item.id = UUID.randomUUID();
+        item.shoppingList = shoppingList;
+        item.itemType = ShoppingListItemType.EXTERNAL_ARTICLE;
+        item.title = normalizeTitle(snapshot.title());
+        item.checked = false;
+        item.lastModifiedByDisplayName = actorDisplayName.value();
+        item.createdAt = now;
+        item.updatedAt = now;
+        item.position = position;
+        item.sourceProvider = snapshot.provider();
+        item.sourceArticleId = snapshot.articleId();
+        item.sourceImageUrl = snapshot.imageUrl();
+        item.sourceCategory = snapshot.category();
+        item.sourcePriceAmount = snapshot.priceAmount();
+        item.sourceCurrency = snapshot.currency();
+        item.sourceSubtitle = snapshot.subtitle();
+        item.sourcePayloadJson = snapshot.rawPayloadJson() == null || snapshot.rawPayloadJson().isBlank()
+                ? "{}"
+                : snapshot.rawPayloadJson();
+        return item;
+    }
+
+    boolean check(ActorDisplayName actorDisplayName, Clock clock) {
+        if (checked) {
+            return false;
+        }
+        checked = true;
+        checkedAt = clock.instant();
+        checkedByDisplayName = actorDisplayName.value();
+        lastModifiedByDisplayName = actorDisplayName.value();
+        updatedAt = checkedAt;
+        return true;
+    }
+
+    boolean uncheck(ActorDisplayName actorDisplayName, Clock clock) {
+        if (!checked) {
+            return false;
+        }
+        checked = false;
+        checkedAt = null;
+        checkedByDisplayName = null;
+        lastModifiedByDisplayName = actorDisplayName.value();
+        updatedAt = clock.instant();
+        return true;
+    }
+
+    public ManualItemDetails manualDetails() {
+        return itemType == ShoppingListItemType.MANUAL ? new ManualItemDetails(manualNote) : null;
+    }
+
+    public ExternalArticleSnapshot externalArticleSnapshot() {
+        if (itemType != ShoppingListItemType.EXTERNAL_ARTICLE) {
+            return null;
+        }
+        return new ExternalArticleSnapshot(
+                sourceProvider,
+                sourceArticleId,
+                title,
+                sourceSubtitle,
+                sourceImageUrl,
+                sourceCategory,
+                sourcePriceAmount,
+                sourceCurrency,
+                sourcePayloadJson
+        );
+    }
+
+    public UUID getId() {
+        return id;
+    }
+
+    public ShoppingListItemType getItemType() {
+        return itemType;
+    }
+
+    public String getTitle() {
+        return title;
+    }
+
+    public boolean isChecked() {
+        return checked;
+    }
+
+    public Instant getCheckedAt() {
+        return checkedAt;
+    }
+
+    public String getCheckedByDisplayName() {
+        return checkedByDisplayName;
+    }
+
+    public String getLastModifiedByDisplayName() {
+        return lastModifiedByDisplayName;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+
+    public Instant getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public int getPosition() {
+        return position;
+    }
+
+    public String getManualNote() {
+        return manualNote;
+    }
+
+    public String getSourceProvider() {
+        return sourceProvider;
+    }
+
+    public String getSourceArticleId() {
+        return sourceArticleId;
+    }
+
+    public String getSourceImageUrl() {
+        return sourceImageUrl;
+    }
+
+    public String getSourceCategory() {
+        return sourceCategory;
+    }
+
+    public BigDecimal getSourcePriceAmount() {
+        return sourcePriceAmount;
+    }
+
+    public String getSourceCurrency() {
+        return sourceCurrency;
+    }
+
+    public String getSourceSubtitle() {
+        return sourceSubtitle;
+    }
+
+    public String getSourcePayloadJson() {
+        return sourcePayloadJson;
+    }
+
+    private static String normalizeTitle(String rawTitle) {
+        if (rawTitle == null || rawTitle.isBlank()) {
+            throw new IllegalArgumentException("Item title must not be blank.");
+        }
+        String normalized = rawTitle.trim();
+        if (normalized.length() > 255) {
+            throw new IllegalArgumentException("Item title must be at most 255 characters.");
+        }
+        return normalized;
+    }
+}
