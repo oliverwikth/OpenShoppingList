@@ -35,9 +35,14 @@ logging:
 
 app:
   cors:
-    allowed-origins:
+    allowed-origin-patterns:
       - http://localhost:5173
       - http://localhost:8081
+      - http://127.0.0.1:5173
+      - http://127.0.0.1:8081
+      - http://192.168.*:8081
+      - https://handla.oliverwi.com
+      - http://handla.oliverwi.com
   retailer:
     willys:
       base-url: https://www.willys.se

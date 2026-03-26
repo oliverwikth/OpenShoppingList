@@ -10,7 +10,7 @@ public record AppProperties(
         RetailerProperties retailer
 ) {
 
-    public record CorsProperties(List<String> allowedOrigins) {
+    public record CorsProperties(List<String> allowedOriginPatterns) {
     }
 
     public record RetailerProperties(WillysProperties willys) {
