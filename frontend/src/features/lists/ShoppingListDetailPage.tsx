@@ -1,8 +1,9 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import { useDeferredValue, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useActorName } from '../actor/useActorName'
 import { addExternalItem, addManualItem, checkItem, decrementItem, fetchList, toggleItemClaim, uncheckItem } from './api'
+import { openListRealtimeSocket, shouldUseRealtimeSocket } from './realtime'
 import { searchRetailer } from '../retailer-search/api'
 import type {
   RetailerSearchResponse,
@@ -35,13 +36,107 @@ export function ShoppingListDetailPage() {
   const [pendingActionKey, setPendingActionKey] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
+  const reconnectTimeoutRef = useRef<number | null>(null)
+  const pollingIntervalRef = useRef<number | null>(null)
 
   const currentView = resolveView(location.pathname)
   const currentRootView = currentView === 'search' ? 'items' : currentView
   const backPath = currentView === 'search' ? viewPath(actorName, listId, 'items') : `/${actorName}`
 
+  const loadList = useEffectEvent(async (options: { background?: boolean } = {}) => {
+    if (!options.background || list === null) {
+      setIsLoading(true)
+    }
+
+    setError(null)
+    try {
+      const loadedList = await fetchList(listId)
+      setList(loadedList)
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : 'Kunde inte hämta listan.')
+    } finally {
+      if (!options.background || list === null) {
+        setIsLoading(false)
+      }
+    }
+  })
+
   useEffect(() => {
     void loadList()
+  }, [listId])
+
+  useEffect(() => {
+    if (!listId) {
+      return
+    }
+
+    let isClosed = false
+    let socket: WebSocket | null = null
+
+    const stopPolling = () => {
+      if (pollingIntervalRef.current !== null) {
+        window.clearInterval(pollingIntervalRef.current)
+        pollingIntervalRef.current = null
+      }
+    }
+
+    const startPolling = () => {
+      if (pollingIntervalRef.current !== null) {
+        return
+      }
+
+      pollingIntervalRef.current = window.setInterval(() => {
+        void loadList({ background: true })
+      }, 5_000)
+    }
+
+    const connect = () => {
+      if (isClosed) {
+        return
+      }
+
+      if (!shouldUseRealtimeSocket()) {
+        startPolling()
+        return
+      }
+
+      try {
+        socket = openListRealtimeSocket(listId)
+      } catch {
+        startPolling()
+        return
+      }
+
+      socket.onopen = () => {
+        stopPolling()
+      }
+      socket.onmessage = () => {
+        void loadList({ background: true })
+      }
+      socket.onclose = () => {
+        socket = null
+        if (isClosed) {
+          return
+        }
+        startPolling()
+        reconnectTimeoutRef.current = window.setTimeout(connect, 1_000)
+      }
+      socket.onerror = () => {
+        socket?.close()
+      }
+    }
+
+    connect()
+
+    return () => {
+      isClosed = true
+      if (reconnectTimeoutRef.current !== null) {
+        window.clearTimeout(reconnectTimeoutRef.current)
+        reconnectTimeoutRef.current = null
+      }
+      stopPolling()
+      socket?.close()
+    }
   }, [listId])
 
   useEffect(() => {
@@ -101,19 +196,6 @@ export function ShoppingListDetailPage() {
     () => (manualSearchLabel ? findMatchingManualSearchItem(list?.items ?? [], manualSearchLabel) : null),
     [list?.items, manualSearchLabel],
   )
-
-  async function loadList() {
-    setIsLoading(true)
-    setError(null)
-    try {
-      const loadedList = await fetchList(listId)
-      setList(loadedList)
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Kunde inte hämta listan.')
-    } finally {
-      setIsLoading(false)
-    }
-  }
 
   async function handleAddManualFromSearch() {
     if (!manualSearchLabel) {
@@ -704,7 +786,7 @@ function categoryTitle(item: ShoppingListItem) {
     return 'Fritext'
   }
 
-  return 'Ovrigt'
+  return 'Övrigt'
 }
 
 function compareGroupNames(left: string, right: string) {

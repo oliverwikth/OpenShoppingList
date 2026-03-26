@@ -1,7 +1,9 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { AppShell } from '../../app/AppShell'
+
+const mockSockets: MockWebSocket[] = []
 
 const initialList = {
   id: 'list-1',
@@ -47,7 +49,13 @@ const updatedList = {
 }
 
 describe('ShoppingListDetailPage', () => {
+  beforeEach(() => {
+    mockSockets.length = 0
+    vi.stubGlobal('WebSocket', MockWebSocket)
+  })
+
   afterEach(() => {
+    vi.useRealTimers()
     vi.restoreAllMocks()
   })
 
@@ -523,4 +531,177 @@ describe('ShoppingListDetailPage', () => {
       )
     })
   })
+
+  it('reloads the list when another client update arrives over websocket', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify(initialList), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          ...initialList,
+          items: [
+            {
+              id: 'item-1',
+              itemType: 'MANUAL',
+              title: 'Bröd',
+              checked: false,
+              checkedAt: null,
+              checkedByDisplayName: null,
+              claimedAt: null,
+              claimedByDisplayName: null,
+              lastModifiedByDisplayName: 'olle',
+              createdAt: '2026-03-26T18:06:00Z',
+              updatedAt: '2026-03-26T18:06:00Z',
+              position: 1,
+              quantity: 1,
+              manualNote: '',
+              externalSnapshot: null,
+            },
+          ],
+          recentActivities: [],
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+    )
+
+    render(
+      <MemoryRouter initialEntries={['/anna/lists/list-1/checklista']}>
+        <AppShell />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('Veckohandling')).toBeInTheDocument()
+    expect(mockSockets).toHaveLength(1)
+
+    mockSockets[0].emitMessage({
+      eventType: 'shopping-list-item.added',
+      listId: 'list-1',
+      itemId: 'item-1',
+      actorDisplayName: 'olle',
+      occurredAt: '2026-03-26T18:06:00Z',
+    })
+
+    expect(await screen.findByText('Bröd')).toBeInTheDocument()
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+    })
+  })
+
+  it('falls back to polling when websocket is unavailable', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    const intervals: Array<{ callback: () => void; delay: number }> = []
+    vi.spyOn(window, 'setInterval').mockImplementation((handler: TimerHandler, delay?: number) => {
+      intervals.push({ callback: handler as () => void, delay: Number(delay ?? 0) })
+      return 1 as unknown as number
+    })
+    vi.spyOn(window, 'clearInterval').mockImplementation(() => undefined)
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify(initialList), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          ...initialList,
+          items: [
+            {
+              id: 'item-1',
+              itemType: 'MANUAL',
+              title: 'Smör',
+              checked: false,
+              checkedAt: null,
+              checkedByDisplayName: null,
+              claimedAt: null,
+              claimedByDisplayName: null,
+              lastModifiedByDisplayName: 'olle',
+              createdAt: '2026-03-26T18:06:00Z',
+              updatedAt: '2026-03-26T18:06:00Z',
+              position: 1,
+              quantity: 1,
+              manualNote: '',
+              externalSnapshot: null,
+            },
+          ],
+          recentActivities: [],
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+    )
+
+    vi.stubGlobal('WebSocket', BrokenWebSocket)
+
+    render(
+      <MemoryRouter initialEntries={['/anna/lists/list-1/checklista']}>
+        <AppShell />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('Veckohandling')).toBeInTheDocument()
+    const pollingCallback = intervals.findLast((interval) => interval.delay === 5_000)?.callback
+    expect(pollingCallback).toBeDefined()
+
+    await act(async () => {
+      await pollingCallback?.()
+    })
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+    })
+
+    expect(await screen.findByText('Smör')).toBeInTheDocument()
+  })
 })
+
+class MockWebSocket {
+  static readonly OPEN = 1
+  static readonly CLOSED = 3
+
+  onclose: ((event: CloseEvent) => void) | null = null
+  onerror: ((event: Event) => void) | null = null
+  onmessage: ((event: MessageEvent<string>) => void) | null = null
+  onopen: ((event: Event) => void) | null = null
+  readyState = MockWebSocket.OPEN
+  readonly url: string
+
+  constructor(url: string) {
+    this.url = url
+    mockSockets.push(this)
+    queueMicrotask(() => {
+      this.onopen?.(new Event('open'))
+    })
+  }
+
+  close() {
+    this.readyState = MockWebSocket.CLOSED
+    this.onclose?.(new CloseEvent('close'))
+  }
+
+  emitMessage(payload: unknown) {
+    this.onmessage?.(
+      new MessageEvent('message', {
+        data: JSON.stringify(payload),
+      }),
+    )
+  }
+}
+
+class BrokenWebSocket {
+  constructor() {
+    throw new Error('WebSocket unavailable')
+  }
+}

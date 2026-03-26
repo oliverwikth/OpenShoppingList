@@ -6,7 +6,7 @@ The application is small enough that microservices would add operational cost wi
 
 - the checklist domain stays central
 - the retailer adapter stays peripheral
-- internal events are explicit and ready for future realtime work
+- internal events are explicit and now drive realtime list updates over WebSocket
 - future agents can extend the system without tracing through framework-heavy coupling
 
 ## Bounded Modules
@@ -123,7 +123,7 @@ This design keeps three future paths open:
 
 1. add more internal projections without changing controllers
 2. add an outbox if external delivery is needed later
-3. publish realtime notifications from event handlers when websocket or SSE support is introduced
+3. publish realtime notifications from event handlers to the list-scoped WebSocket transport
 
 ## Persistence Model
 
@@ -174,9 +174,9 @@ This keeps the “who am I for attribution” concern visible without introducin
 
 Implement a new adapter behind `RetailerSearchPort`, map its live response into `RetailerArticleSearchResult`, and keep snapshot creation unchanged.
 
-### Add Realtime
+### Realtime
 
-Attach a publisher to domain event handling or an outbox table, then emit websocket or SSE updates without changing aggregate logic.
+Realtime updates are attached to the existing internal domain-event flow. Aggregates still emit plain domain events, application listeners react to those events, and a thin WebSocket transport broadcasts list-scoped update messages on `/ws/lists/{listId}`. Frontend list pages subscribe per active list and refresh their read model when an event arrives.
 
 ### Add Templates
 

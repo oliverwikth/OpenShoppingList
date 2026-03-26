@@ -20,7 +20,7 @@ OpenShoppingList is a mobile-first household shopping checklist application buil
 
 - No authentication or authorization
 - No offline mode
-- No websockets or realtime transport
+- WebSocket-based realtime list updates for active list views
 - No template feature yet
 - No price totals or price-based sorting
 - No retailer catalog ingestion
