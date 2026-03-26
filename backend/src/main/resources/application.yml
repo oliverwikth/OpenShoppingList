@@ -42,6 +42,7 @@ app:
     willys:
       base-url: https://www.willys.se
       search-path: /search
+      product-path: /axfood/rest/p/{code}
       connect-timeout: 3s
       read-timeout: 6s
       max-results: 12

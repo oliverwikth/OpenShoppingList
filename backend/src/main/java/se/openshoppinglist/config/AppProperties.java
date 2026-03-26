@@ -19,6 +19,7 @@ public record AppProperties(
     public record WillysProperties(
             String baseUrl,
             String searchPath,
+            String productPath,
             Duration connectTimeout,
             Duration readTimeout,
             int maxResults

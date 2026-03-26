@@ -67,7 +67,7 @@ class WillysRetailerSearchAdapter implements RetailerSearchPort {
                 product.name(),
                 product.productLine2(),
                 product.image() == null ? null : product.image().url(),
-                blankToNull(product.googleAnalyticsCategory()),
+                WillysCategoryResolver.topLevelAnalyticsCategory(product.googleAnalyticsCategory()),
                 product.priceValue(),
                 product.priceValue() == null ? null : "SEK",
                 toJson(product)

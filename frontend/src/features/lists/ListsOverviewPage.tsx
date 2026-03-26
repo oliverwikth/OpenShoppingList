@@ -52,7 +52,7 @@ export function ListsOverviewPage() {
     try {
       const createdList = await createList(actorName, newListName.trim())
       closeCreateDialog()
-      navigate(`/${actorName}/lists/${createdList.id}`)
+      navigate(`/${actorName}/lists/${createdList.id}/varor`)
     } catch (createError) {
       setError(createError instanceof Error ? createError.message : 'Kunde inte skapa listan.')
     } finally {
@@ -88,16 +88,16 @@ export function ListsOverviewPage() {
         <section className="screen-card screen-card--minimal">
           <div className="section-heading">
             <h1>Alla listor</h1>
-            <button className="header-action" onClick={() => void loadLists()} type="button">
+            <button className="header-action header-action--light" onClick={() => void loadLists()} type="button">
               Uppdatera
             </button>
           </div>
 
-          {isLoading ? <p className="empty-state">Hamta listor...</p> : null}
-          {!isLoading && lists.length === 0 ? <p className="empty-panel">Inga listor an. Tryck pa plus for att skapa den forsta.</p> : null}
+          {isLoading ? <p className="empty-state">Hämtar listor...</p> : null}
+          {!isLoading && lists.length === 0 ? <p className="empty-panel">Inga listor än. Tryck på plus för att skapa den första.</p> : null}
           <div className="list-stack">
             {lists.map((list) => (
-              <Link className="household-list-card household-list-card--minimal" key={list.id} to={`/${actorName}/lists/${list.id}`}>
+              <Link className="household-list-card household-list-card--minimal" key={list.id} to={`/${actorName}/lists/${list.id}/varor`}>
                 <div>
                   <strong className="household-list-card__title">{list.name}</strong>
                   <p className="household-list-card__meta">Senast av {list.lastModifiedByDisplayName}</p>
@@ -121,7 +121,7 @@ export function ListsOverviewPage() {
           <form className="modal-card inline-form" onSubmit={handleCreateList}>
             <div className="modal-header">
               <h2>Ny lista</h2>
-              <button aria-label="Stang" className="modal-close" onClick={closeCreateDialog} type="button">
+              <button aria-label="Stäng" className="modal-close" onClick={closeCreateDialog} type="button">
                 ×
               </button>
             </div>

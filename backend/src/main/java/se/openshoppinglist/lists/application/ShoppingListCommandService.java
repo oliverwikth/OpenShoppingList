@@ -12,21 +12,25 @@ import se.openshoppinglist.lists.domain.ExternalArticleSnapshot;
 import se.openshoppinglist.lists.domain.ShoppingList;
 import se.openshoppinglist.lists.domain.ShoppingListItem;
 import se.openshoppinglist.lists.domain.ShoppingListRepository;
+import se.openshoppinglist.retailer.application.RetailerArticleDetailsService;
 
 @Service
 public class ShoppingListCommandService {
 
     private final ShoppingListRepository shoppingListRepository;
     private final DomainEventPublisher domainEventPublisher;
+    private final RetailerArticleDetailsService retailerArticleDetailsService;
     private final Clock clock;
 
     public ShoppingListCommandService(
             ShoppingListRepository shoppingListRepository,
             DomainEventPublisher domainEventPublisher,
+            RetailerArticleDetailsService retailerArticleDetailsService,
             Clock clock
     ) {
         this.shoppingListRepository = shoppingListRepository;
         this.domainEventPublisher = domainEventPublisher;
+        this.retailerArticleDetailsService = retailerArticleDetailsService;
         this.clock = clock;
     }
 
@@ -61,7 +65,8 @@ public class ShoppingListCommandService {
     @Transactional
     public ShoppingListItem addExternalItem(UUID listId, ExternalArticleSnapshot snapshot, ActorDisplayName actorDisplayName) {
         ShoppingList shoppingList = requireList(listId);
-        ShoppingListItem item = shoppingList.addExternalItem(snapshot, actorDisplayName, clock);
+        ExternalArticleSnapshot enrichedSnapshot = retailerArticleDetailsService.enrichSnapshot(snapshot);
+        ShoppingListItem item = shoppingList.addExternalItem(enrichedSnapshot, actorDisplayName, clock);
         persistAndPublish(shoppingList);
         return item;
     }

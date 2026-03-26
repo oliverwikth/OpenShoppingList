@@ -61,7 +61,7 @@
   border: 0;
   padding: 0 14px;
   color: inherit;
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--brand);
   text-decoration: none;
   font-weight: 700;
 }
@@ -74,10 +74,16 @@
   height: 44px;
   border: 0;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--brand);
   color: white;
   font-size: 1.9rem;
   line-height: 1;
+}
+
+.header-action--light {
+  background: #ffffff;
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--line);
 }
 
 .screen-body {
@@ -101,7 +107,7 @@
 }
 
 .screen-card--hero {
-  background: linear-gradient(180deg, #fffefc 0%, #fff8f7 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #f4f9ff 100%);
 }
 
 .screen-card--minimal {
@@ -193,7 +199,7 @@
 .search-input {
   width: 100%;
   height: 52px;
-  border: 1px solid #d4dced;
+  border: 1px solid rgba(96, 123, 125, 0.28);
   border-radius: 999px;
   padding: 0 18px;
   background: white;
@@ -203,8 +209,8 @@
 }
 
 .search-input:focus {
-  border-color: #8db7ff;
-  box-shadow: 0 0 0 3px rgba(44, 118, 255, 0.12);
+  border-color: #abd2fa;
+  box-shadow: 0 0 0 3px rgba(171, 210, 250, 0.3);
 }
 
 .search-input--button {
@@ -324,12 +330,44 @@
   grid-template-columns: auto auto 1fr auto;
 }
 
+.checklist-screen {
+  display: grid;
+  gap: 18px;
+}
+
+.checklist-summary {
+  padding: 2px 0 4px;
+}
+
+.checklist-summary strong {
+  font-size: 1.5rem;
+  line-height: 1.05;
+  letter-spacing: -0.04em;
+}
+
+.checklist-section {
+  display: grid;
+  gap: 10px;
+}
+
+.checklist-section--checked {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+.checklist-section__title {
+  margin: 0;
+  padding: 0 2px;
+  font-size: 1.2rem;
+}
+
 .catalog-row__media {
   width: 54px;
   height: 54px;
   border-radius: 16px;
   overflow: hidden;
-  background: #f4f4f4;
+  background: var(--surface-muted);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -346,7 +384,7 @@
 }
 
 .catalog-row__media--brand {
-  background: #f4f4f4;
+  background: var(--surface-muted);
 }
 
 .catalog-row__content {
@@ -371,6 +409,12 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
+}
+
+.catalog-row__aside--stack {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
 }
 
 .summary-pill,
@@ -415,8 +459,8 @@
   height: 36px;
   border: 0;
   border-radius: 999px;
-  background: var(--surface-muted);
-  color: var(--text);
+  background: var(--brand);
+  color: white;
   font-size: 1.2rem;
   line-height: 1;
 }
@@ -449,6 +493,49 @@
   color: var(--muted);
 }
 
+.checklist-row--minimal {
+  position: relative;
+  border-radius: 0;
+  padding: 12px 0;
+  background: transparent;
+}
+
+.checklist-row--minimal:first-child {
+  padding-top: 4px;
+}
+
+.checklist-row--minimal:last-child {
+  padding-bottom: 4px;
+}
+
+.checklist-row--minimal .catalog-row__media {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+}
+
+.checklist-row--minimal .catalog-row__content {
+  gap: 2px;
+}
+
+.checklist-row--minimal .catalog-row__content strong {
+  font-size: 0.96rem;
+}
+
+.checklist-quantity {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.checklist-row__divider {
+  grid-column: 1 / -1;
+  height: 1px;
+  background: var(--line);
+  margin-top: 12px;
+}
+
 .activity-row {
   grid-template-columns: auto 1fr;
   border: 1px solid var(--line);
@@ -457,9 +544,9 @@
 .info-banner {
   border-radius: 18px;
   padding: 14px 16px;
-  background: rgba(217, 45, 39, 0.08);
-  border: 1px solid rgba(217, 45, 39, 0.14);
-  color: var(--brand);
+  background: rgba(171, 210, 250, 0.32);
+  border: 1px solid rgba(96, 123, 125, 0.24);
+  color: var(--text);
 }
 
 .overview-body--minimal {
@@ -471,6 +558,21 @@
   padding: 20px 8px;
   color: var(--muted);
   text-align: center;
+}
+
+.total-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 4px 0;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.total-bar strong {
+  color: var(--text);
+  font-size: 1.05rem;
 }
 
 .modal-backdrop {
