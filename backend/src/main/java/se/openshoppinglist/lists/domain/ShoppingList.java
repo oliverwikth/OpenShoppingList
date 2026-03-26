@@ -87,6 +87,16 @@ public class ShoppingList extends AggregateRoot {
 
     public ShoppingListItem addManualItem(String title, String note, ActorDisplayName actorDisplayName, Clock clock) {
         ensureActive();
+        Optional<ShoppingListItem> existingItem = items.stream()
+                .filter(item -> item.matchesManual(title, note))
+                .findFirst();
+        if (existingItem.isPresent()) {
+            ShoppingListItem item = existingItem.get();
+            item.increaseQuantity(actorDisplayName, clock);
+            touch(actorDisplayName, clock);
+            recordEvent(new ShoppingDomainEvent("shopping-list-item.quantity-increased", id, item.getId(), actorDisplayName.value(), updatedAt));
+            return item;
+        }
         ShoppingListItem item = ShoppingListItem.manual(this, nextPosition(), title, note, actorDisplayName, clock);
         items.add(item);
         touch(actorDisplayName, clock);
@@ -96,6 +106,16 @@ public class ShoppingList extends AggregateRoot {
 
     public ShoppingListItem addExternalItem(ExternalArticleSnapshot snapshot, ActorDisplayName actorDisplayName, Clock clock) {
         ensureActive();
+        Optional<ShoppingListItem> existingItem = items.stream()
+                .filter(item -> item.matchesExternal(snapshot))
+                .findFirst();
+        if (existingItem.isPresent()) {
+            ShoppingListItem item = existingItem.get();
+            item.increaseQuantity(actorDisplayName, clock);
+            touch(actorDisplayName, clock);
+            recordEvent(new ShoppingDomainEvent("shopping-list-item.quantity-increased", id, item.getId(), actorDisplayName.value(), updatedAt));
+            return item;
+        }
         ShoppingListItem item = ShoppingListItem.external(this, nextPosition(), snapshot, actorDisplayName, clock);
         items.add(item);
         touch(actorDisplayName, clock);
@@ -119,6 +139,21 @@ public class ShoppingList extends AggregateRoot {
             recordEvent(new ShoppingDomainEvent("shopping-list-item.unchecked", id, itemId, actorDisplayName.value(), updatedAt));
         }
         return item;
+    }
+
+    public void decreaseItemQuantity(UUID itemId, ActorDisplayName actorDisplayName, Clock clock) {
+        ensureActive();
+        ShoppingListItem item = getItem(itemId);
+        boolean shouldRemove = item.decreaseQuantity(actorDisplayName, clock);
+        if (shouldRemove) {
+            items.remove(item);
+            touch(actorDisplayName, clock);
+            recordEvent(new ShoppingDomainEvent("shopping-list-item.removed", id, null, actorDisplayName.value(), updatedAt));
+            return;
+        }
+
+        touch(actorDisplayName, clock);
+        recordEvent(new ShoppingDomainEvent("shopping-list-item.quantity-decreased", id, itemId, actorDisplayName.value(), updatedAt));
     }
 
     public UUID getId() {

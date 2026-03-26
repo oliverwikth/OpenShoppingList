@@ -1,5 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { AppShell } from '../../app/AppShell'
 
@@ -8,7 +7,15 @@ describe('ListsOverviewPage', () => {
     vi.restoreAllMocks()
   })
 
-  it('loads shared lists for the actor route and creates a new list with actor attribution', async () => {
+  it('loads shared lists for the actor route and creates a new list from the plus dialog with actor attribution', async () => {
+    vi.spyOn(Intl, 'DateTimeFormat').mockImplementation(
+      function MockDateTimeFormat() {
+        return {
+          format: () => '26 mars 2026',
+        } as Intl.DateTimeFormat
+      } as unknown as typeof Intl.DateTimeFormat,
+    )
+
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
       new Response(
         JSON.stringify([
@@ -62,11 +69,16 @@ describe('ListsOverviewPage', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText(/Hushållsläge · anna/i)).toBeInTheDocument()
+    expect(await screen.findByText('Alla listor')).toBeInTheDocument()
     expect(await screen.findByText('Veckohandling')).toBeInTheDocument()
 
-    await userEvent.type(screen.getByLabelText('Listnamn'), 'Helgmiddag')
-    await userEvent.click(screen.getByRole('button', { name: 'Skapa lista' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Skapa ny lista' }))
+
+    const input = screen.getByLabelText('Listnamn')
+    expect(input).toHaveValue('26 mars 2026')
+
+    fireEvent.change(input, { target: { value: 'Helgmiddag' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Skapa lista' }))
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(

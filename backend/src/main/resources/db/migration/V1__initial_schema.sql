@@ -20,6 +20,7 @@ create table shopping_list_item (
     created_at timestamptz not null,
     updated_at timestamptz not null,
     position integer not null,
+    quantity integer not null default 1,
     manual_note text,
     source_provider varchar(40),
     source_article_id varchar(120),

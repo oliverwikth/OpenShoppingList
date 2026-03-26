@@ -50,6 +50,7 @@ class ShoppingListApiIntegrationTest extends PostgresIntegrationTest {
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.title").value("Mjölk"))
+                .andExpect(jsonPath("$.quantity").value(1))
                 .andExpect(jsonPath("$.manualNote").value("Laktosfri"));
 
         MvcResult listDetails = mockMvc.perform(get("/api/lists/{listId}", listId))
@@ -80,6 +81,65 @@ class ShoppingListApiIntegrationTest extends PostgresIntegrationTest {
                 .andExpect(jsonPath("$.items[0].checked").value(false))
                 .andExpect(jsonPath("$.items[0].checkedByDisplayName").doesNotExist())
                 .andExpect(jsonPath("$.recentActivities[0].eventType").value("shopping-list-item.unchecked"));
+    }
+
+    @Test
+    void incrementsExistingQuantityAndRemovesItemWhenDecrementedToZero() throws Exception {
+        MvcResult createListResult = mockMvc.perform(post("/api/lists")
+                        .header(ActorDisplayName.HEADER_NAME, "anna")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Veckohandling"}
+                                """))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        String listId = readId(createListResult);
+
+        mockMvc.perform(post("/api/lists/{listId}/items/manual", listId)
+                        .header(ActorDisplayName.HEADER_NAME, "anna")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"title":"Äpplen","note":""}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.quantity").value(1));
+
+        mockMvc.perform(post("/api/lists/{listId}/items/manual", listId)
+                        .header(ActorDisplayName.HEADER_NAME, "anna")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"title":"Äpplen","note":""}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.quantity").value(2));
+
+        MvcResult listDetails = mockMvc.perform(get("/api/lists/{listId}", listId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].quantity").value(2))
+                .andReturn();
+
+        String itemId = objectMapper.readTree(listDetails.getResponse().getContentAsString())
+                .path("items")
+                .path(0)
+                .path("id")
+                .asText();
+
+        mockMvc.perform(post("/api/lists/{listId}/items/{itemId}/decrement", listId, itemId)
+                        .header(ActorDisplayName.HEADER_NAME, "anna"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/lists/{listId}", listId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].quantity").value(1));
+
+        mockMvc.perform(post("/api/lists/{listId}/items/{itemId}/decrement", listId, itemId)
+                        .header(ActorDisplayName.HEADER_NAME, "anna"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/lists/{listId}", listId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items").isEmpty());
     }
 
     @Test

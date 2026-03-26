@@ -46,6 +46,7 @@ public final class ShoppingListViews {
             Instant createdAt,
             Instant updatedAt,
             int position,
+            int quantity,
             String manualNote,
             ExternalSnapshotView externalSnapshot
     ) {

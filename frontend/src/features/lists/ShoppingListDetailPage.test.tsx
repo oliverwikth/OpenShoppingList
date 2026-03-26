@@ -30,7 +30,8 @@ const updatedList = {
       createdAt: '2026-03-26T18:05:00Z',
       updatedAt: '2026-03-26T18:05:00Z',
       position: 1,
-      manualNote: 'Till tårtan',
+      quantity: 1,
+      manualNote: '',
       externalSnapshot: null,
     },
   ],
@@ -50,7 +51,68 @@ describe('ShoppingListDetailPage', () => {
     vi.restoreAllMocks()
   })
 
-  it('adds a manual item and reloads the list detail', async () => {
+  it('moves checked items into a separate section at the bottom of the checklist', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          ...initialList,
+          items: [
+            {
+              id: 'item-1',
+              itemType: 'MANUAL',
+              title: 'Tomater',
+              checked: false,
+              checkedAt: null,
+              checkedByDisplayName: null,
+              lastModifiedByDisplayName: 'anna',
+              createdAt: '2026-03-26T18:05:00Z',
+              updatedAt: '2026-03-26T18:05:00Z',
+              position: 1,
+              quantity: 1,
+              manualNote: '',
+              externalSnapshot: null,
+            },
+            {
+              id: 'item-2',
+              itemType: 'MANUAL',
+              title: 'Mjolk',
+              checked: true,
+              checkedAt: '2026-03-26T18:06:00Z',
+              checkedByDisplayName: 'anna',
+              lastModifiedByDisplayName: 'anna',
+              createdAt: '2026-03-26T18:06:00Z',
+              updatedAt: '2026-03-26T18:06:00Z',
+              position: 2,
+              quantity: 2,
+              manualNote: '',
+              externalSnapshot: null,
+            },
+          ],
+          recentActivities: [],
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+    )
+
+    const { container } = render(
+      <MemoryRouter initialEntries={['/anna/lists/list-1?view=checklist']}>
+        <AppShell />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByRole('heading', { name: 'Avprickade varor' })).toBeInTheDocument()
+    expect(screen.getByText('Tomater')).toBeInTheDocument()
+    expect(screen.getByText('Mjolk')).toBeInTheDocument()
+
+    const content = container.textContent ?? ''
+    expect(content.indexOf('Tomater')).toBeLessThan(content.indexOf('Avprickade varor'))
+    expect(content.indexOf('Avprickade varor')).toBeLessThan(content.indexOf('Mjolk'))
+  })
+
+  it('adds a manual item from the search screen and reloads the list detail', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch')
     fetchMock.mockResolvedValueOnce(
       new Response(JSON.stringify(initialList), {
@@ -71,7 +133,8 @@ describe('ShoppingListDetailPage', () => {
           createdAt: '2026-03-26T18:05:00Z',
           updatedAt: '2026-03-26T18:05:00Z',
           position: 1,
-          manualNote: 'Till tårtan',
+          quantity: 1,
+          manualNote: '',
           externalSnapshot: null,
         }),
         {
@@ -86,6 +149,21 @@ describe('ShoppingListDetailPage', () => {
         headers: { 'Content-Type': 'application/json' },
       }),
     )
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          provider: 'willys',
+          query: 'Födelsedagsljus',
+          available: true,
+          message: null,
+          results: [],
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+    )
 
     render(
       <MemoryRouter initialEntries={['/anna/lists/list-1']}>
@@ -95,13 +173,15 @@ describe('ShoppingListDetailPage', () => {
 
     expect(await screen.findByText('Veckohandling')).toBeInTheDocument()
 
-    const inputs = screen.getAllByRole('textbox')
-    await userEvent.type(inputs[1], 'Födelsedagsljus')
-    await userEvent.type(inputs[2], 'Till tårtan')
-    await userEvent.click(screen.getByRole('button', { name: 'Lägg till rad' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Sok' }))
+    await userEvent.type(screen.getByLabelText('Sok artikel'), 'Födelsedagsljus')
+    await userEvent.click(screen.getByRole('button', { name: 'Lagg till Födelsedagsljus' }))
 
+    expect(screen.getByLabelText('Sok artikel')).toHaveValue('Födelsedagsljus')
+    expect(await screen.findByRole('button', { name: 'Minska Födelsedagsljus' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Oka Födelsedagsljus' })).toBeInTheDocument()
     expect(await screen.findByText('Födelsedagsljus')).toBeInTheDocument()
-    expect(await screen.findByText(/Till tårtan/i)).toBeInTheDocument()
+    expect(await screen.findByText('1')).toBeInTheDocument()
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(

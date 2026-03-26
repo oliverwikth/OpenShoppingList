@@ -69,3 +69,10 @@ export function uncheckItem(actorName: string, listId: string, itemId: string) {
     actorName,
   })
 }
+
+export function decrementItem(actorName: string, listId: string, itemId: string) {
+  return apiRequest<void>(`/api/lists/${listId}/items/${itemId}/decrement`, {
+    method: 'POST',
+    actorName,
+  })
+}

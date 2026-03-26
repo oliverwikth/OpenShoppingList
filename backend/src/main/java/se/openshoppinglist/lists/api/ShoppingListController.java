@@ -145,6 +145,19 @@ public class ShoppingListController {
         ));
     }
 
+    @PostMapping("/{listId}/items/{itemId}/decrement")
+    void decrementItem(
+            @PathVariable UUID listId,
+            @PathVariable UUID itemId,
+            HttpServletRequest request
+    ) {
+        shoppingListCommandService.decreaseItemQuantity(
+                listId,
+                itemId,
+                actorContextResolver.resolve(request)
+        );
+    }
+
     public record CreateListRequest(@NotBlank String name) {
     }
 

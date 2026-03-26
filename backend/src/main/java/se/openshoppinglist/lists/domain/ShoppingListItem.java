@@ -54,6 +54,9 @@ public class ShoppingListItem {
     @Column(nullable = false)
     private int position;
 
+    @Column(nullable = false)
+    private int quantity;
+
     @Column(name = "manual_note")
     private String manualNote;
 
@@ -104,6 +107,7 @@ public class ShoppingListItem {
         item.createdAt = now;
         item.updatedAt = now;
         item.position = position;
+        item.quantity = 1;
         item.sourcePayloadJson = "{}";
         return item;
     }
@@ -126,6 +130,7 @@ public class ShoppingListItem {
         item.createdAt = now;
         item.updatedAt = now;
         item.position = position;
+        item.quantity = 1;
         item.sourceProvider = snapshot.provider();
         item.sourceArticleId = snapshot.articleId();
         item.sourceImageUrl = snapshot.imageUrl();
@@ -161,6 +166,40 @@ public class ShoppingListItem {
         lastModifiedByDisplayName = actorDisplayName.value();
         updatedAt = clock.instant();
         return true;
+    }
+
+    void increaseQuantity(ActorDisplayName actorDisplayName, Clock clock) {
+        quantity += 1;
+        clearCheckState();
+        lastModifiedByDisplayName = actorDisplayName.value();
+        updatedAt = clock.instant();
+    }
+
+    boolean decreaseQuantity(ActorDisplayName actorDisplayName, Clock clock) {
+        if (quantity <= 1) {
+            quantity = 0;
+            clearCheckState();
+            lastModifiedByDisplayName = actorDisplayName.value();
+            updatedAt = clock.instant();
+            return true;
+        }
+
+        quantity -= 1;
+        lastModifiedByDisplayName = actorDisplayName.value();
+        updatedAt = clock.instant();
+        return false;
+    }
+
+    boolean matchesManual(String title, String note) {
+        return itemType == ShoppingListItemType.MANUAL
+                && this.title.equals(normalizeTitle(title))
+                && normalizeNote(manualNote).equals(normalizeNote(note));
+    }
+
+    boolean matchesExternal(ExternalArticleSnapshot snapshot) {
+        return itemType == ShoppingListItemType.EXTERNAL_ARTICLE
+                && normalizeValue(sourceProvider).equals(normalizeValue(snapshot.provider()))
+                && normalizeValue(sourceArticleId).equals(normalizeValue(snapshot.articleId()));
     }
 
     public ManualItemDetails manualDetails() {
@@ -224,6 +263,10 @@ public class ShoppingListItem {
         return position;
     }
 
+    public int getQuantity() {
+        return quantity;
+    }
+
     public String getManualNote() {
         return manualNote;
     }
@@ -260,6 +303,12 @@ public class ShoppingListItem {
         return sourcePayloadJson;
     }
 
+    private void clearCheckState() {
+        checked = false;
+        checkedAt = null;
+        checkedByDisplayName = null;
+    }
+
     private static String normalizeTitle(String rawTitle) {
         if (rawTitle == null || rawTitle.isBlank()) {
             throw new IllegalArgumentException("Item title must not be blank.");
@@ -269,5 +318,13 @@ public class ShoppingListItem {
             throw new IllegalArgumentException("Item title must be at most 255 characters.");
         }
         return normalized;
+    }
+
+    private static String normalizeNote(String rawNote) {
+        return rawNote == null || rawNote.isBlank() ? "" : rawNote.trim();
+    }
+
+    private static String normalizeValue(String rawValue) {
+        return rawValue == null ? "" : rawValue.trim();
     }
 }

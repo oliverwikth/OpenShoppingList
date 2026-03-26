@@ -43,4 +43,31 @@ class ShoppingListDomainTest {
                         "shopping-list-item.unchecked"
                 );
     }
+
+    @Test
+    void mergesRepeatedAddsIntoQuantityAndRemovesItemAtZero() {
+        ShoppingList shoppingList = ShoppingList.create("Veckohandling", new ActorDisplayName("anna"), FIXED_CLOCK);
+
+        ShoppingListItem item = shoppingList.addManualItem("Bananer", "", new ActorDisplayName("anna"), FIXED_CLOCK);
+        ShoppingListItem sameItem = shoppingList.addManualItem("Bananer", "", new ActorDisplayName("anna"), FIXED_CLOCK);
+
+        assertThat(shoppingList.getItems()).hasSize(1);
+        assertThat(sameItem.getId()).isEqualTo(item.getId());
+        assertThat(item.getQuantity()).isEqualTo(2);
+
+        shoppingList.decreaseItemQuantity(item.getId(), new ActorDisplayName("anna"), FIXED_CLOCK);
+        assertThat(item.getQuantity()).isEqualTo(1);
+
+        shoppingList.decreaseItemQuantity(item.getId(), new ActorDisplayName("anna"), FIXED_CLOCK);
+        assertThat(shoppingList.getItems()).isEmpty();
+        assertThat(shoppingList.pullDomainEvents())
+                .extracting("eventType")
+                .containsExactly(
+                        "shopping-list.created",
+                        "shopping-list-item.added",
+                        "shopping-list-item.quantity-increased",
+                        "shopping-list-item.quantity-decreased",
+                        "shopping-list-item.removed"
+                );
+    }
 }

@@ -60,8 +60,11 @@ public class ShoppingListQueryService {
     }
 
     public ShoppingListOverviewView toOverviewView(ShoppingList shoppingList) {
-        int itemCount = shoppingList.getItems().size();
-        int checkedCount = (int) shoppingList.getItems().stream().filter(ShoppingListItem::isChecked).count();
+        int itemCount = shoppingList.getItems().stream().mapToInt(ShoppingListItem::getQuantity).sum();
+        int checkedCount = shoppingList.getItems().stream()
+                .filter(ShoppingListItem::isChecked)
+                .mapToInt(ShoppingListItem::getQuantity)
+                .sum();
         return new ShoppingListOverviewView(
                 shoppingList.getId(),
                 shoppingList.getName(),
@@ -96,6 +99,7 @@ public class ShoppingListQueryService {
                 item.getCreatedAt(),
                 item.getUpdatedAt(),
                 item.getPosition(),
+                item.getQuantity(),
                 item.getManualNote(),
                 externalSnapshot
         );

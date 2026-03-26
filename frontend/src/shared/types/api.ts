@@ -32,6 +32,7 @@ export interface ShoppingListItem {
   createdAt: string
   updatedAt: string
   position: number
+  quantity: number
   manualNote: string | null
   externalSnapshot: ExternalSnapshot | null
 }

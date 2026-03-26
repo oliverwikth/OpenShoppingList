@@ -82,6 +82,13 @@ public class ShoppingListCommandService {
         return item;
     }
 
+    @Transactional
+    public void decreaseItemQuantity(UUID listId, UUID itemId, ActorDisplayName actorDisplayName) {
+        ShoppingList shoppingList = requireList(listId);
+        shoppingList.decreaseItemQuantity(itemId, actorDisplayName, clock);
+        persistAndPublish(shoppingList);
+    }
+
     private ShoppingList requireList(UUID listId) {
         return shoppingListRepository.findById(listId)
                 .orElseThrow(() -> new EntityNotFoundException("Shopping list not found: " + listId));

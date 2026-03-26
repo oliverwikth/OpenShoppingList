@@ -6,11 +6,21 @@ import { useActorName } from '../actor/useActorName'
 import type { ShoppingListOverview } from '../../shared/types/api'
 import '../../components/ui/ui.css'
 
+function getDefaultListTitle() {
+  return new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Europe/Stockholm',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(new Date())
+}
+
 export function ListsOverviewPage() {
   const actorName = useActorName()
   const navigate = useNavigate()
   const [lists, setLists] = useState<ShoppingListOverview[]>([])
-  const [newListName, setNewListName] = useState('')
+  const [newListName, setNewListName] = useState(getDefaultListTitle)
+  const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -41,7 +51,7 @@ export function ListsOverviewPage() {
     setError(null)
     try {
       const createdList = await createList(actorName, newListName.trim())
-      setNewListName('')
+      closeCreateDialog()
       navigate(`/${actorName}/lists/${createdList.id}`)
     } catch (createError) {
       setError(createError instanceof Error ? createError.message : 'Kunde inte skapa listan.')
@@ -50,72 +60,84 @@ export function ListsOverviewPage() {
     }
   }
 
+  function openCreateDialog() {
+    setNewListName(getDefaultListTitle())
+    setIsCreateOpen(true)
+  }
+
+  function closeCreateDialog() {
+    setIsCreateOpen(false)
+    setNewListName(getDefaultListTitle())
+  }
+
   return (
-    <main className="page-shell">
-      <section className="hero-card">
-        <span className="eyebrow">Hushållsläge · {actorName}</span>
-        <h1 className="headline">Delade inköpslistor utan konton och krångel.</h1>
-        <p className="subtle-text">
-          Öppna appen via <code>/{actorName}</code> och börja direkt. Alla i hushållet ser samma data, och ditt namn
-          används bara för att visa vem som checkade av eller ändrade något.
-        </p>
-      </section>
+    <main className="app-frame">
+      <header className="app-header app-header-home">
+        <div className="app-header__title app-header__title--left">
+          <span className="app-header__eyebrow">Mina listor</span>
+          <strong>{actorName}</strong>
+        </div>
+        <button aria-label="Skapa ny lista" className="header-plus" onClick={openCreateDialog} type="button">
+          +
+        </button>
+      </header>
 
-      <section className="section-card">
-        <h2 style={{ marginTop: 0 }}>Skapa ny lista</h2>
-        <p className="subtle-text" style={{ marginBottom: 14 }}>
-          Exempel: Veckohandling, Helgmiddag, Födelsedag.
-        </p>
-        <form className="stack" onSubmit={handleCreateList}>
-          <input
-            aria-label="Listnamn"
-            className="text-input"
-            placeholder="Veckohandling"
-            value={newListName}
-            onChange={(event) => setNewListName(event.target.value)}
-          />
-          <button className="button button-primary" type="submit" disabled={isSaving || !newListName.trim()}>
-            {isSaving ? 'Skapar...' : 'Skapa lista'}
-          </button>
-        </form>
-      </section>
+      <section className="screen-body overview-body overview-body--minimal">
+        {error ? <div className="info-banner">{error}</div> : null}
 
-      {error ? <div className="info-banner">{error}</div> : null}
-
-      <section className="section-card">
-        <div className="row-between" style={{ marginBottom: 14 }}>
-          <div>
-            <h2 style={{ margin: 0 }}>Alla listor</h2>
-            <p className="subtle-text">Aktiva och arkiverade hushållslistor.</p>
+        <section className="screen-card screen-card--minimal">
+          <div className="section-heading">
+            <h1>Alla listor</h1>
+            <button className="header-action" onClick={() => void loadLists()} type="button">
+              Uppdatera
+            </button>
           </div>
-          <button className="button button-ghost" onClick={() => void loadLists()} type="button">
-            Uppdatera
-          </button>
-        </div>
 
-        {isLoading ? <p className="subtle-text">Hämtar listor...</p> : null}
-
-        {!isLoading && lists.length === 0 ? (
-          <p className="subtle-text">Inga listor än. Skapa den första ovan.</p>
-        ) : null}
-
-        <div className="grid">
-          {lists.map((list) => (
-            <Link className="list-card" key={list.id} to={`/${actorName}/lists/${list.id}`}>
-              <div className="row-between">
-                <strong>{list.name}</strong>
-                <span className="meta-pill">{list.status === 'ACTIVE' ? 'Aktiv' : 'Arkiverad'}</span>
-              </div>
-              <div className="row" style={{ flexWrap: 'wrap' }}>
-                <span className="meta-pill">
-                  {list.checkedItemCount} av {list.itemCount} klara
-                </span>
-                <span className="meta-pill">Senast av {list.lastModifiedByDisplayName}</span>
-              </div>
-            </Link>
-          ))}
-        </div>
+          {isLoading ? <p className="empty-state">Hamta listor...</p> : null}
+          {!isLoading && lists.length === 0 ? <p className="empty-panel">Inga listor an. Tryck pa plus for att skapa den forsta.</p> : null}
+          <div className="list-stack">
+            {lists.map((list) => (
+              <Link className="household-list-card household-list-card--minimal" key={list.id} to={`/${actorName}/lists/${list.id}`}>
+                <div>
+                  <strong className="household-list-card__title">{list.name}</strong>
+                  <p className="household-list-card__meta">Senast av {list.lastModifiedByDisplayName}</p>
+                </div>
+                <div className="household-list-card__aside">
+                  <span className="summary-pill">
+                    {list.checkedItemCount}/{list.itemCount}
+                  </span>
+                  <span className={`status-pill ${list.status === 'ACTIVE' ? 'is-live' : ''}`}>
+                    {list.status === 'ACTIVE' ? 'Aktiv' : 'Arkiverad'}
+                  </span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
       </section>
+
+      {isCreateOpen ? (
+        <div aria-modal="true" className="modal-backdrop" role="dialog">
+          <form className="modal-card inline-form" onSubmit={handleCreateList}>
+            <div className="modal-header">
+              <h2>Ny lista</h2>
+              <button aria-label="Stang" className="modal-close" onClick={closeCreateDialog} type="button">
+                ×
+              </button>
+            </div>
+            <input
+              aria-label="Listnamn"
+              autoFocus
+              className="search-input"
+              value={newListName}
+              onChange={(event) => setNewListName(event.target.value)}
+            />
+            <button className="primary-pill" disabled={isSaving || !newListName.trim()} type="submit">
+              {isSaving ? 'Skapar...' : 'Skapa lista'}
+            </button>
+          </form>
+        </div>
+      ) : null}
     </main>
   )
 }

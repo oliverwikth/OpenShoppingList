@@ -1,11 +1,9 @@
-import { useDeferredValue, useEffect, useMemo, useState } from 'react'
-import type { FormEvent } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { useActorName } from '../actor/useActorName'
-import { addExternalItem, addManualItem, checkItem, fetchList, renameList, uncheckItem } from './api'
+import { addExternalItem, addManualItem, checkItem, decrementItem, fetchList, uncheckItem } from './api'
 import { searchRetailer } from '../retailer-search/api'
 import type {
-  ActivityEntry,
   RetailerSearchResponse,
   RetailerSearchResult,
   ShoppingListDetail,
@@ -13,30 +11,51 @@ import type {
 } from '../../shared/types/api'
 import '../../components/ui/ui.css'
 
+type ViewMode = 'items' | 'search' | 'checklist'
+
+interface ItemGroup {
+  title: string
+  items: ShoppingListItem[]
+}
+
+const SCREEN_ORDER: ViewMode[] = ['items', 'search', 'checklist']
+
 export function ShoppingListDetailPage() {
   const actorName = useActorName()
   const { listId = '' } = useParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [list, setList] = useState<ShoppingListDetail | null>(null)
-  const [nameDraft, setNameDraft] = useState('')
-  const [manualTitle, setManualTitle] = useState('')
-  const [manualNote, setManualNote] = useState('')
   const [searchInput, setSearchInput] = useState('')
   const deferredSearchInput = useDeferredValue(searchInput)
   const [searchResponse, setSearchResponse] = useState<RetailerSearchResponse | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const [isSavingName, setIsSavingName] = useState(false)
-  const [isAddingManual, setIsAddingManual] = useState(false)
   const [isSearching, setIsSearching] = useState(false)
-  const [pendingItemId, setPendingItemId] = useState<string | null>(null)
+  const [pendingActionKey, setPendingActionKey] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
+
+  const currentView = resolveView(searchParams.get('view'))
 
   useEffect(() => {
     void loadList()
   }, [listId])
 
   useEffect(() => {
+    if (currentView !== 'search') {
+      return
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      searchInputRef.current?.focus()
+    }, 50)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [currentView])
+
+  useEffect(() => {
     if (deferredSearchInput.trim().length < 2) {
       setSearchResponse(null)
+      setIsSearching(false)
       return
     }
 
@@ -46,11 +65,14 @@ export function ShoppingListDetailPage() {
       try {
         setSearchResponse(await searchRetailer(deferredSearchInput.trim(), controller.signal))
       } catch (searchError) {
-        setError(searchError instanceof Error ? searchError.message : 'Kunde inte söka.')
+        if (searchError instanceof DOMException && searchError.name === 'AbortError') {
+          return
+        }
+        setError(searchError instanceof Error ? searchError.message : 'Kunde inte soka.')
       } finally {
         setIsSearching(false)
       }
-    }, 260)
+    }, 240)
 
     return () => {
       controller.abort()
@@ -58,14 +80,22 @@ export function ShoppingListDetailPage() {
     }
   }, [deferredSearchInput])
 
-  const sortedItems = useMemo(() => {
-    return [...(list?.items ?? [])].sort((left, right) => {
-      if (left.checked !== right.checked) {
-        return left.checked ? 1 : -1
-      }
-      return left.position - right.position
-    })
-  }, [list?.items])
+  const itemsInOrder = useMemo(() => [...(list?.items ?? [])].sort((left, right) => left.position - right.position), [list?.items])
+  const uncheckedChecklistGroups = useMemo(
+    () => groupItems((list?.items ?? []).filter((item) => !item.checked)),
+    [list?.items],
+  )
+  const checkedChecklistItems = useMemo(
+    () => [...(list?.items ?? [])].filter((item) => item.checked).sort((left, right) => left.position - right.position),
+    [list?.items],
+  )
+  const totalQuantity = list?.items.reduce((sum, item) => sum + item.quantity, 0) ?? 0
+  const checkedCount = list?.items.reduce((sum, item) => sum + (item.checked ? item.quantity : 0), 0) ?? 0
+  const manualSearchLabel = searchInput.trim()
+  const manualSearchItem = useMemo(
+    () => (manualSearchLabel ? findMatchingManualSearchItem(list?.items ?? [], manualSearchLabel) : null),
+    [list?.items, manualSearchLabel],
+  )
 
   async function loadList() {
     setIsLoading(true)
@@ -73,67 +103,58 @@ export function ShoppingListDetailPage() {
     try {
       const loadedList = await fetchList(listId)
       setList(loadedList)
-      setNameDraft(loadedList.name)
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Kunde inte hämta listan.')
+      setError(loadError instanceof Error ? loadError.message : 'Kunde inte hamta listan.')
     } finally {
       setIsLoading(false)
     }
   }
 
-  async function handleRenameList(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (!nameDraft.trim()) {
+  async function handleAddManualFromSearch() {
+    if (!manualSearchLabel) {
       return
     }
 
-    setIsSavingName(true)
+    setPendingActionKey(manualSearchKey(manualSearchLabel))
     setError(null)
     try {
-      await renameList(actorName, listId, nameDraft.trim())
-      await loadList()
-    } catch (renameError) {
-      setError(renameError instanceof Error ? renameError.message : 'Kunde inte byta namn.')
-    } finally {
-      setIsSavingName(false)
-    }
-  }
-
-  async function handleAddManualItem(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (!manualTitle.trim()) {
-      return
-    }
-
-    setIsAddingManual(true)
-    setError(null)
-    try {
-      await addManualItem(actorName, listId, manualTitle.trim(), manualNote.trim())
-      setManualTitle('')
-      setManualNote('')
+      await addManualItem(actorName, listId, manualSearchLabel, '')
       await loadList()
     } catch (addError) {
-      setError(addError instanceof Error ? addError.message : 'Kunde inte lägga till manuellt objekt.')
+      setError(addError instanceof Error ? addError.message : 'Kunde inte lagga till fritext.')
     } finally {
-      setIsAddingManual(false)
+      setPendingActionKey(null)
     }
   }
 
   async function handleAddRetailerItem(result: RetailerSearchResult) {
-    setPendingItemId(result.articleId)
+    setPendingActionKey(externalSearchKey(result))
     setError(null)
     try {
       await addExternalItem(actorName, listId, result)
       await loadList()
     } catch (addError) {
-      setError(addError instanceof Error ? addError.message : 'Kunde inte lägga till butiksversionen.')
+      setError(addError instanceof Error ? addError.message : 'Kunde inte lagga till artikeln.')
     } finally {
-      setPendingItemId(null)
+      setPendingActionKey(null)
+    }
+  }
+
+  async function handleDecreaseItem(item: ShoppingListItem, actionKey: string) {
+    setPendingActionKey(actionKey)
+    setError(null)
+    try {
+      await decrementItem(actorName, listId, item.id)
+      await loadList()
+    } catch (decreaseError) {
+      setError(decreaseError instanceof Error ? decreaseError.message : 'Kunde inte minska antalet.')
+    } finally {
+      setPendingActionKey(null)
     }
   }
 
   async function handleToggleItem(item: ShoppingListItem) {
-    setPendingItemId(item.id)
+    setPendingActionKey(item.id)
     setError(null)
     try {
       if (item.checked) {
@@ -145,208 +166,448 @@ export function ShoppingListDetailPage() {
     } catch (toggleError) {
       setError(toggleError instanceof Error ? toggleError.message : 'Kunde inte uppdatera raden.')
     } finally {
-      setPendingItemId(null)
+      setPendingActionKey(null)
     }
   }
 
+  function switchView(view: ViewMode) {
+    setSearchParams(view === 'items' ? {} : { view })
+  }
+
   return (
-    <main className="page-shell">
-      <section className="hero-card">
-        <div className="stack" style={{ gap: 10 }}>
-          <span className="eyebrow">Aktör · {actorName}</span>
-          <Link className="subtle-text" to={`/${actorName}`}>
-            ← Till alla listor
-          </Link>
+    <main className="app-frame">
+      <header className="app-header">
+        <Link className="header-icon-button" to={`/${actorName}`}>
+          ←
+        </Link>
+        <div className="app-header__title">
+          <span className="app-header__eyebrow">Att handla som {actorName}</span>
+          <strong>{list?.name ?? 'Hamta lista...'}</strong>
         </div>
-        {isLoading ? <p className="subtle-text">Hämtar lista...</p> : null}
+        <button className="header-action" onClick={() => void loadList()} type="button">
+          Uppdatera
+        </button>
+      </header>
+
+      <section className="screen-body detail-body">
+        {error ? <div className="info-banner">{error}</div> : null}
+        {isLoading ? <div className="screen-card">Hamta lista...</div> : null}
+
         {list ? (
           <>
-            <h1 className="headline" style={{ marginBottom: 8 }}>
-              {list.name}
-            </h1>
-            <p className="subtle-text">Senast uppdaterad av {list.lastModifiedByDisplayName}.</p>
+            {currentView === 'items' ? (
+              <section className="screen-stack">
+                <button
+                  aria-label="Oppna sok"
+                  className="search-input search-input--button"
+                  onClick={() => switchView('search')}
+                  type="button"
+                >
+                  Sok eller lagg till vara
+                </button>
+
+                {itemsInOrder.length === 0 ? <p className="empty-panel">Listan ar tom an. Gaa till Sok for att lagga till dina forsta varor.</p> : null}
+
+                {itemsInOrder.length > 0 ? (
+                  <div className="catalog-list catalog-list--panel">
+                    {itemsInOrder.map((item) => (
+                      <article className="catalog-row catalog-row--minimal" key={item.id}>
+                        <div className="catalog-row__media">{renderItemMedia(item)}</div>
+                        <div className="catalog-row__content">
+                          <strong>{item.title}</strong>
+                          <div className="catalog-row__meta">
+                            <span>{itemSubtitle(item)}</span>
+                            <span>{formatQuantity(item.quantity)}</span>
+                            {item.externalSnapshot?.priceAmount !== null &&
+                            item.externalSnapshot?.priceAmount !== undefined ? (
+                              <span>{formatPrice(item.externalSnapshot.priceAmount, item.externalSnapshot.currency)}</span>
+                            ) : null}
+                          </div>
+                        </div>
+                        <div className="catalog-row__aside">
+                          {item.checked ? <span className="status-pill is-live">Klar</span> : null}
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                ) : null}
+              </section>
+            ) : null}
+
+            {currentView === 'search' ? (
+              <section className="screen-stack">
+                <div className="search-shell search-shell--top">
+                  <input
+                    ref={searchInputRef}
+                    aria-label="Sok artikel"
+                    className="search-input"
+                    placeholder="Lagg till produkt"
+                    value={searchInput}
+                    onChange={(event) => setSearchInput(event.target.value)}
+                  />
+                </div>
+
+                <div className="catalog-list catalog-list--search">
+                  {manualSearchLabel ? (
+                    <article className="catalog-row" key="manual-search-item">
+                      <div className="catalog-row__media catalog-row__media--brand">TXT</div>
+                      <div className="catalog-row__content">
+                        <strong>{manualSearchLabel}</strong>
+                        <p>Fritextartikel</p>
+                      </div>
+                      <div className="catalog-row__aside">
+                        <QuantityAction
+                          actionKey={manualSearchKey(manualSearchLabel)}
+                          isPending={pendingActionKey === manualSearchKey(manualSearchLabel)}
+                          item={manualSearchItem}
+                          onDecrease={handleDecreaseItem}
+                          onIncrease={handleAddManualFromSearch}
+                          title={manualSearchLabel}
+                        />
+                      </div>
+                    </article>
+                  ) : null}
+
+                  {isSearching ? <p className="empty-state">Soker...</p> : null}
+                  {searchResponse?.available === false && searchResponse.message ? <div className="info-banner">{searchResponse.message}</div> : null}
+                  {!isSearching && searchInput.trim().length < 2 ? (
+                    <p className="empty-state">Skriv minst tva tecken for att soka artiklar.</p>
+                  ) : null}
+                  {!isSearching && searchInput.trim().length >= 2 && searchResponse !== null && !searchResponse.results.length ? (
+                    <p className="empty-state">Inga butikstraffar just nu. Lagg till som fritext i stallet.</p>
+                  ) : null}
+
+                  <div className="catalog-list">
+                    {searchResponse?.results.map((result) => (
+                      <article className="catalog-row" key={result.articleId}>
+                        <div className="catalog-row__media">{renderSearchMedia(result)}</div>
+                        <div className="catalog-row__content">
+                          <strong>{result.title}</strong>
+                          <p>{result.subtitle ?? result.category ?? 'Butiksartikel'}</p>
+                          <div className="catalog-row__meta">
+                            {result.category ? <span>{result.category}</span> : null}
+                            {result.priceAmount !== null ? <span>{formatPrice(result.priceAmount, result.currency)}</span> : null}
+                          </div>
+                        </div>
+                        <div className="catalog-row__aside">
+                          <QuantityAction
+                            actionKey={externalSearchKey(result)}
+                            isPending={pendingActionKey === externalSearchKey(result)}
+                            item={findMatchingExternalSearchItem(list?.items ?? [], result)}
+                            onDecrease={handleDecreaseItem}
+                            onIncrease={() => void handleAddRetailerItem(result)}
+                            title={result.title}
+                          />
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                </div>
+              </section>
+            ) : null}
+
+            {currentView === 'checklist' ? (
+              <section className="screen-stack">
+                <section className="screen-card screen-card--hero">
+                  <div className="section-heading">
+                    <div>
+                      <span className="section-kicker">Checklista</span>
+                      <h1 className="screen-title">
+                        {checkedCount} av {totalQuantity} klara
+                      </h1>
+                    </div>
+                  </div>
+                  <p className="screen-subtitle">
+                    Pricka av under rundan i butiken. Alla andringar sparas direkt med namn pa den som gjorde dem.
+                  </p>
+                </section>
+
+                {list.items.length === 0 ? (
+                  <section className="screen-card">
+                    <p className="empty-state">Inga rader att pricka av an. Lagg till varor i sokvyn forst.</p>
+                  </section>
+                ) : null}
+
+                {uncheckedChecklistGroups.map((group) => (
+                  <section className="screen-card" key={group.title}>
+                    <div className="section-heading">
+                      <div>
+                        <span className="section-kicker">Kategori</span>
+                        <h2>{group.title}</h2>
+                      </div>
+                    </div>
+                    <div className="checklist-list">
+                      {group.items.map((item) => (
+                        <article className={`checklist-row ${item.checked ? 'is-checked' : ''}`} key={item.id}>
+                          <button
+                            aria-label={item.checked ? `Avmarkera ${item.title}` : `Markera ${item.title}`}
+                            className={`square-check ${item.checked ? 'is-checked' : ''}`}
+                            disabled={pendingActionKey === item.id}
+                            onClick={() => void handleToggleItem(item)}
+                            type="button"
+                          >
+                            {item.checked ? 'x' : ''}
+                          </button>
+                          <div className="catalog-row__media">{renderItemMedia(item)}</div>
+                          <div className="catalog-row__content">
+                            <strong>{item.title}</strong>
+                            <p>{itemSubtitle(item)}</p>
+                            <div className="catalog-row__meta">
+                              <span>{item.checked ? `Klar av ${item.lastModifiedByDisplayName}` : `Vantar pa ${actorName}`}</span>
+                              <span>{formatQuantity(item.quantity)}</span>
+                              {item.externalSnapshot?.priceAmount !== null &&
+                              item.externalSnapshot?.priceAmount !== undefined ? (
+                                <span>{formatPrice(item.externalSnapshot.priceAmount, item.externalSnapshot.currency)}</span>
+                              ) : null}
+                            </div>
+                          </div>
+                          <div className="catalog-row__aside">
+                            <span className="summary-pill">{item.checked ? 'Klar' : formatQuantity(item.quantity)}</span>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  </section>
+                ))}
+
+                {checkedChecklistItems.length > 0 ? (
+                  <section className="screen-card">
+                    <div className="section-heading">
+                      <div>
+                        <span className="section-kicker">Klart</span>
+                        <h2>Avprickade varor</h2>
+                      </div>
+                    </div>
+                    <div className="checklist-list">
+                      {checkedChecklistItems.map((item) => (
+                        <article className="checklist-row is-checked" key={item.id}>
+                          <button
+                            aria-label={`Avmarkera ${item.title}`}
+                            className="square-check is-checked"
+                            disabled={pendingActionKey === item.id}
+                            onClick={() => void handleToggleItem(item)}
+                            type="button"
+                          >
+                            x
+                          </button>
+                          <div className="catalog-row__media">{renderItemMedia(item)}</div>
+                          <div className="catalog-row__content">
+                            <strong>{item.title}</strong>
+                            <p>{itemSubtitle(item)}</p>
+                            <div className="catalog-row__meta">
+                              <span>{`Klar av ${item.lastModifiedByDisplayName}`}</span>
+                              <span>{formatQuantity(item.quantity)}</span>
+                              {item.externalSnapshot?.priceAmount !== null &&
+                              item.externalSnapshot?.priceAmount !== undefined ? (
+                                <span>{formatPrice(item.externalSnapshot.priceAmount, item.externalSnapshot.currency)}</span>
+                              ) : null}
+                            </div>
+                          </div>
+                          <div className="catalog-row__aside">
+                            <span className="summary-pill">{formatQuantity(item.quantity)}</span>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
+              </section>
+            ) : null}
           </>
         ) : null}
       </section>
 
-      {error ? <div className="info-banner">{error}</div> : null}
-
-      {list ? (
-        <div className="grid-two">
-          <section className="stack">
-            <section className="section-card">
-              <h2 style={{ marginTop: 0 }}>Byt listnamn</h2>
-              <p className="subtle-text" style={{ marginBottom: 12 }}>
-                Bra när samma lista blir en ny veckohandling.
-              </p>
-              <form className="stack" onSubmit={handleRenameList}>
-                <input className="text-input" value={nameDraft} onChange={(event) => setNameDraft(event.target.value)} />
-                <button className="button button-secondary" disabled={isSavingName || !nameDraft.trim()} type="submit">
-                  {isSavingName ? 'Sparar...' : 'Spara namn'}
-                </button>
-              </form>
-            </section>
-
-            <section className="section-card">
-              <h2 style={{ marginTop: 0 }}>Lägg till manuellt</h2>
-              <form className="stack" onSubmit={handleAddManualItem}>
-                <input
-                  className="text-input"
-                  placeholder="Till exempel: födelsedagsljus"
-                  value={manualTitle}
-                  onChange={(event) => setManualTitle(event.target.value)}
-                />
-                <input
-                  className="text-input"
-                  placeholder="Valfri anteckning"
-                  value={manualNote}
-                  onChange={(event) => setManualNote(event.target.value)}
-                />
-                <button className="button button-primary" disabled={isAddingManual || !manualTitle.trim()} type="submit">
-                  {isAddingManual ? 'Lägger till...' : 'Lägg till rad'}
-                </button>
-              </form>
-            </section>
-
-            <section className="section-card">
-              <h2 style={{ marginTop: 0 }}>Sök hos Willys</h2>
-              <p className="subtle-text" style={{ marginBottom: 12 }}>
-                Resultaten används bara som snapshots i checklistan.
-              </p>
-              <div className="stack">
-                <input
-                  className="text-input"
-                  placeholder="Sök artikel"
-                  value={searchInput}
-                  onChange={(event) => setSearchInput(event.target.value)}
-                />
-                {isSearching ? <p className="subtle-text">Söker...</p> : null}
-                {searchResponse?.available === false && searchResponse.message ? (
-                  <div className="info-banner">{searchResponse.message}</div>
-                ) : null}
-                <div className="result-grid">
-                  {searchResponse?.results.map((result) => (
-                    <article className="search-result-card" key={result.articleId}>
-                      <div className="row">
-                        {result.imageUrl ? <img alt={result.title} src={result.imageUrl} /> : null}
-                        <div className="stack" style={{ gap: 6, minWidth: 0 }}>
-                          <strong>{result.title}</strong>
-                          {result.subtitle ? <span className="subtle-text">{result.subtitle}</span> : null}
-                          <div className="row" style={{ flexWrap: 'wrap' }}>
-                            {result.category ? <span className="meta-pill">{result.category}</span> : null}
-                            {result.priceAmount !== null ? (
-                              <span className="meta-pill">
-                                {result.priceAmount.toFixed(2)} {result.currency ?? 'SEK'}
-                              </span>
-                            ) : null}
-                          </div>
-                        </div>
-                      </div>
-                      <button
-                        className="button button-secondary"
-                        disabled={pendingItemId === result.articleId}
-                        onClick={() => void handleAddRetailerItem(result)}
-                        type="button"
-                      >
-                        {pendingItemId === result.articleId ? 'Lägger till...' : 'Lägg till i listan'}
-                      </button>
-                    </article>
-                  ))}
-                </div>
-              </div>
-            </section>
-          </section>
-
-          <section className="stack">
-            <section className="section-card">
-              <div className="row-between" style={{ marginBottom: 12 }}>
-                <div>
-                  <h2 style={{ margin: 0 }}>Checklistan</h2>
-                  <p className="subtle-text">
-                    {list.items.filter((item) => item.checked).length} av {list.items.length} klara.
-                  </p>
-                </div>
-                <button className="button button-ghost" onClick={() => void loadList()} type="button">
-                  Uppdatera
-                </button>
-              </div>
-
-              <div className="stack">
-                {sortedItems.map((item) => (
-                  <article className="item-row" key={item.id}>
-                    <button
-                      aria-label={item.checked ? 'Avmarkera rad' : 'Markera rad'}
-                      className={`check-button ${item.checked ? 'is-checked' : ''}`}
-                      disabled={pendingItemId === item.id}
-                      onClick={() => void handleToggleItem(item)}
-                      type="button"
-                    >
-                      {item.checked ? <span className="check-dot" /> : null}
-                    </button>
-                    <div className="stack" style={{ gap: 6 }}>
-                      <p className={`item-title ${item.checked ? 'is-checked' : ''}`}>{item.title}</p>
-                      <div className="item-meta">
-                        {item.manualNote ? <div>Anteckning: {item.manualNote}</div> : null}
-                        {item.externalSnapshot?.subtitle ? <div>{item.externalSnapshot.subtitle}</div> : null}
-                        {item.externalSnapshot?.category ? <div>Kategori: {item.externalSnapshot.category}</div> : null}
-                        {item.externalSnapshot?.priceAmount !== null && item.externalSnapshot?.priceAmount !== undefined ? (
-                          <div>
-                            Pris: {item.externalSnapshot.priceAmount.toFixed(2)} {item.externalSnapshot.currency ?? 'SEK'}
-                          </div>
-                        ) : null}
-                        {item.checkedByDisplayName ? <div>Senast av: {item.checkedByDisplayName}</div> : null}
-                      </div>
-                    </div>
-                    {item.externalSnapshot?.imageUrl ? (
-                      <img
-                        alt=""
-                        src={item.externalSnapshot.imageUrl}
-                        style={{ width: 52, height: 52, borderRadius: 14, objectFit: 'cover' }}
-                      />
-                    ) : (
-                      <div />
-                    )}
-                  </article>
-                ))}
-              </div>
-            </section>
-
-            <section className="section-card">
-              <h2 style={{ marginTop: 0 }}>Senaste aktivitet</h2>
-              <div className="timeline">
-                {list.recentActivities.slice(0, 8).map((activity) => (
-                  <article className="timeline-entry" key={activity.id}>
-                    <strong>{activity.actorDisplayName}</strong>
-                    <div className="subtle-text">{renderActivity(activity)}</div>
-                  </article>
-                ))}
-              </div>
-            </section>
-          </section>
-        </div>
-      ) : null}
+      <nav className="bottom-tabs" aria-label="Listvyer">
+        {SCREEN_ORDER.map((view) => (
+          <button
+            className={`bottom-tab ${currentView === view ? 'is-active' : ''}`}
+            key={view}
+            onClick={() => switchView(view)}
+            type="button"
+          >
+            {labelForView(view)}
+          </button>
+        ))}
+      </nav>
     </main>
   )
 }
 
-function renderActivity(activity: ActivityEntry) {
-  const when = new Date(activity.occurredAt).toLocaleString('sv-SE', {
-    dateStyle: 'short',
-    timeStyle: 'short',
-  })
+function renderItemMedia(item: ShoppingListItem) {
+  if (item.externalSnapshot?.imageUrl) {
+    return <img alt="" src={item.externalSnapshot.imageUrl} />
+  }
 
-  const action =
-    activity.eventType === 'shopping-list-item.checked'
-      ? 'checkade en rad'
-      : activity.eventType === 'shopping-list-item.unchecked'
-        ? 'avmarkerade en rad'
-        : activity.eventType === 'shopping-list-item.added'
-          ? 'lade till en rad'
-          : activity.eventType === 'shopping-list.renamed'
-            ? 'döpte om listan'
-            : activity.eventType === 'shopping-list.created'
-              ? 'skapade listan'
-              : 'gjorde en ändring'
+  return <span>TXT</span>
+}
 
-  return `${action} · ${when}`
+function renderSearchMedia(result: RetailerSearchResult) {
+  if (result.imageUrl) {
+    return <img alt="" src={result.imageUrl} />
+  }
+
+  return <span>W</span>
+}
+
+interface QuantityActionProps {
+  actionKey: string
+  isPending: boolean
+  item: ShoppingListItem | null
+  onDecrease: (item: ShoppingListItem, actionKey: string) => Promise<void>
+  onIncrease: () => void | Promise<void>
+  title: string
+}
+
+function QuantityAction({ actionKey, isPending, item, onDecrease, onIncrease, title }: QuantityActionProps) {
+  if (!item) {
+    return (
+      <button
+        aria-label={`Lagg till ${title}`}
+        className="circle-action"
+        disabled={isPending}
+        onClick={() => void onIncrease()}
+        type="button"
+      >
+        {isPending ? '...' : '+'}
+      </button>
+    )
+  }
+
+  return (
+    <div className="quantity-stepper" role="group" aria-label={`Antal for ${title}`}>
+      <button
+        aria-label={`Minska ${title}`}
+        className="quantity-stepper__button"
+        disabled={isPending}
+        onClick={() => void onDecrease(item, actionKey)}
+        type="button"
+      >
+        -
+      </button>
+      <span className="quantity-stepper__count">{item.quantity}</span>
+      <button
+        aria-label={`Oka ${title}`}
+        className="quantity-stepper__button"
+        disabled={isPending}
+        onClick={() => void onIncrease()}
+        type="button"
+      >
+        +
+      </button>
+    </div>
+  )
+}
+
+function labelForView(view: ViewMode) {
+  if (view === 'items') {
+    return 'Varor'
+  }
+
+  if (view === 'search') {
+    return 'Sok'
+  }
+
+  return 'Checklista'
+}
+
+function resolveView(value: string | null): ViewMode {
+  if (value === 'search' || value === 'checklist') {
+    return value
+  }
+
+  return 'items'
+}
+
+function groupItems(items: ShoppingListItem[]): ItemGroup[] {
+  const grouped = new Map<string, ShoppingListItem[]>()
+
+  for (const item of items) {
+    const title = categoryTitle(item)
+    grouped.set(title, [...(grouped.get(title) ?? []), item])
+  }
+
+  return [...grouped.entries()]
+    .sort(([left], [right]) => compareGroupNames(left, right))
+    .map(([title, groupedItems]) => ({
+      title,
+      items: [...groupedItems].sort((left, right) => left.position - right.position),
+    }))
+}
+
+function categoryTitle(item: ShoppingListItem) {
+  if (item.externalSnapshot?.category?.trim()) {
+    return item.externalSnapshot.category
+  }
+
+  if (item.itemType === 'MANUAL') {
+    return 'Fritext'
+  }
+
+  return 'Ovrigt'
+}
+
+function compareGroupNames(left: string, right: string) {
+  if (left === 'Fritext') {
+    return -1
+  }
+
+  if (right === 'Fritext') {
+    return 1
+  }
+
+  return left.localeCompare(right, 'sv')
+}
+
+function itemSubtitle(item: ShoppingListItem) {
+  if (item.manualNote?.trim()) {
+    return item.manualNote
+  }
+
+  if (item.externalSnapshot?.subtitle?.trim()) {
+    return item.externalSnapshot.subtitle
+  }
+
+  if (item.externalSnapshot?.category?.trim()) {
+    return item.externalSnapshot.category
+  }
+
+  return 'Delad hushallsrad'
+}
+
+function formatQuantity(quantity: number) {
+  return `${quantity} st`
+}
+
+function formatPrice(priceAmount: number, currency: string | null | undefined = 'SEK') {
+  return `${priceAmount.toFixed(2)} ${currency ?? 'SEK'}`
+}
+
+function findMatchingManualSearchItem(items: ShoppingListItem[], title: string) {
+  return (
+    items.find(
+      (item) =>
+        item.itemType === 'MANUAL' &&
+        item.title.trim().localeCompare(title.trim(), 'sv', { sensitivity: 'accent' }) === 0 &&
+        !item.manualNote?.trim(),
+    ) ?? null
+  )
+}
+
+function findMatchingExternalSearchItem(items: ShoppingListItem[], result: RetailerSearchResult) {
+  return (
+    items.find(
+      (item) =>
+        item.itemType === 'EXTERNAL_ARTICLE' &&
+        item.externalSnapshot?.provider === result.provider &&
+        item.externalSnapshot?.articleId === result.articleId,
+    ) ?? null
+  )
+}
+
+function manualSearchKey(title: string) {
+  return `manual:${title.trim().toLocaleLowerCase('sv-SE')}`
+}
+
+function externalSearchKey(result: RetailerSearchResult) {
+  return `external:${result.provider}:${result.articleId}`
 }
