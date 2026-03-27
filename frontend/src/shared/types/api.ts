@@ -73,6 +73,10 @@ export interface RetailerSearchResult {
 export interface RetailerSearchResponse {
   provider: string
   query: string
+  currentPage: number
+  totalPages: number
+  totalResults: number
+  hasMoreResults: boolean
   available: boolean
   message: string | null
   results: RetailerSearchResult[]

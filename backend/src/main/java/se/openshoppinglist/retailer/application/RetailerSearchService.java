@@ -12,10 +12,13 @@ public class RetailerSearchService {
         this.retailerSearchPort = retailerSearchPort;
     }
 
-    public RetailerSearchResponse search(String query) {
+    public RetailerSearchResponse search(String query, int page) {
         if (query == null || query.isBlank()) {
             throw new IllegalArgumentException("Search query must not be blank.");
         }
-        return retailerSearchPort.search(query.trim());
+        if (page < 0) {
+            throw new IllegalArgumentException("Search page must not be negative.");
+        }
+        return retailerSearchPort.search(query.trim(), page);
     }
 }

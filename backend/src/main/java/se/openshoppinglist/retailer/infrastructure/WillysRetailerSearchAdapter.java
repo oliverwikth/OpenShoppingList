@@ -32,27 +32,36 @@ class WillysRetailerSearchAdapter implements RetailerSearchPort {
     }
 
     @Override
-    public RetailerSearchResponse search(String query) {
+    public RetailerSearchResponse search(String query, int page) {
         try {
             WillysSearchResponse response = restClient.get()
                     .uri(builder -> builder.path(properties.searchPath())
                             .queryParam("q", query)
-                            .queryParam("page", 0)
+                            .queryParam("page", page)
                             .build())
                     .accept(MediaType.APPLICATION_JSON)
                     .retrieve()
                     .body(WillysSearchResponse.class);
+            WillysPagination pagination = response == null ? null : response.pagination();
             List<RetailerArticleSearchResult> results = response == null || response.results() == null
                     ? List.of()
                     : response.results().stream()
                     .limit(properties.maxResults())
                     .map(this::toSearchResult)
                     .toList();
-            return new RetailerSearchResponse("willys", query, true, null, results);
+            int currentPage = pagination == null ? page : pagination.currentPage();
+            int totalPages = pagination == null ? (results.isEmpty() ? 0 : currentPage + 1) : pagination.numberOfPages();
+            int totalResults = pagination == null ? results.size() : pagination.totalNumberOfResults();
+            boolean hasMoreResults = currentPage + 1 < totalPages;
+            return new RetailerSearchResponse("willys", query, currentPage, totalPages, totalResults, hasMoreResults, true, null, results);
         } catch (RestClientException exception) {
             return new RetailerSearchResponse(
                     "willys",
                     query,
+                    page,
+                    0,
+                    0,
+                    false,
                     false,
                     "Willys search is temporarily unavailable.",
                     List.of()
@@ -86,7 +95,17 @@ class WillysRetailerSearchAdapter implements RetailerSearchPort {
         return value == null || value.isBlank() ? null : value;
     }
 
-    record WillysSearchResponse(List<WillysProduct> results) {
+    record WillysSearchResponse(WillysPagination pagination, List<WillysProduct> results) {
+    }
+
+    record WillysPagination(
+            int pageSize,
+            int currentPage,
+            int numberOfPages,
+            int totalNumberOfResults,
+            int allProductsInCategoriesCount,
+            int allProductsInSearchCount
+    ) {
     }
 
     record WillysProduct(

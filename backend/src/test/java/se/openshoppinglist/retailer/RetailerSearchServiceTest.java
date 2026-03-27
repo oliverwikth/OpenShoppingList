@@ -14,15 +14,19 @@ class RetailerSearchServiceTest {
 
     @Test
     void rejectsBlankQueries() {
-        RetailerSearchService retailerSearchService = new RetailerSearchService(query -> new RetailerSearchResponse(
+        RetailerSearchService retailerSearchService = new RetailerSearchService((query, page) -> new RetailerSearchResponse(
                 "willys",
                 query,
+                page,
+                0,
+                0,
+                false,
                 true,
                 null,
                 List.of()
         ));
 
-        assertThatThrownBy(() -> retailerSearchService.search(" "))
+        assertThatThrownBy(() -> retailerSearchService.search(" ", 0))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("must not be blank");
     }
@@ -40,12 +44,32 @@ class RetailerSearchServiceTest {
                 null,
                 "{}"
         );
-        RetailerSearchPort port = query -> new RetailerSearchResponse("willys", query, true, null, List.of(result));
+        RetailerSearchPort port = (query, page) -> new RetailerSearchResponse("willys", query, page, 3, 30, true, true, null, List.of(result));
         RetailerSearchService retailerSearchService = new RetailerSearchService(port);
 
-        RetailerSearchResponse response = retailerSearchService.search("kaffe");
+        RetailerSearchResponse response = retailerSearchService.search("kaffe", 1);
 
         assertThat(response.results()).containsExactly(result);
         assertThat(response.query()).isEqualTo("kaffe");
+        assertThat(response.currentPage()).isEqualTo(1);
+    }
+
+    @Test
+    void rejectsNegativePages() {
+        RetailerSearchService retailerSearchService = new RetailerSearchService((query, page) -> new RetailerSearchResponse(
+                "willys",
+                query,
+                page,
+                0,
+                0,
+                false,
+                true,
+                null,
+                List.of()
+        ));
+
+        assertThatThrownBy(() -> retailerSearchService.search("kaffe", -1))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("must not be negative");
     }
 }

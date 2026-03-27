@@ -1,6 +1,6 @@
 import { useDeferredValue, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
-import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useActorName } from '../actor/useActorName'
 import { addExternalItem, addManualItem, checkItem, decrementItem, fetchList, toggleItemClaim, uncheckItem } from './api'
 import { openListRealtimeSocket, shouldUseRealtimeSocket } from './realtime'
@@ -13,7 +13,7 @@ import type {
 } from '../../shared/types/api'
 import '../../components/ui/ui.css'
 
-type ViewMode = 'items' | 'search' | 'checklist'
+type ViewMode = 'items' | 'search' | 'search-expanded' | 'checklist'
 
 interface ItemGroup {
   title: string
@@ -27,8 +27,9 @@ export function ShoppingListDetailPage() {
   const { listId = '' } = useParams()
   const location = useLocation()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [list, setList] = useState<ShoppingListDetail | null>(null)
-  const [searchInput, setSearchInput] = useState('')
+  const [searchInput, setSearchInput] = useState(searchParams.get('q') ?? '')
   const deferredSearchInput = useDeferredValue(searchInput)
   const [searchResponse, setSearchResponse] = useState<RetailerSearchResponse | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -40,8 +41,13 @@ export function ShoppingListDetailPage() {
   const pollingIntervalRef = useRef<number | null>(null)
 
   const currentView = resolveView(location.pathname)
-  const currentRootView = currentView === 'search' ? 'items' : currentView
-  const backPath = currentView === 'search' ? viewPath(actorName, listId, 'items') : `/${actorName}`
+  const currentRootView = currentView === 'search' || currentView === 'search-expanded' ? 'items' : currentView
+  const currentSearchPage = resolveSearchPage(currentView, searchParams)
+  const backPath = currentView === 'search-expanded'
+    ? viewPath(actorName, listId, 'search', searchInput)
+    : currentView === 'search'
+      ? viewPath(actorName, listId, 'items')
+      : `/${actorName}`
 
   const loadList = useEffectEvent(async (options: { background?: boolean } = {}) => {
     if (!options.background || list === null) {
@@ -140,6 +146,10 @@ export function ShoppingListDetailPage() {
   }, [listId])
 
   useEffect(() => {
+    setSearchInput(searchParams.get('q') ?? '')
+  }, [searchParams])
+
+  useEffect(() => {
     if (currentView !== 'search') {
       return
     }
@@ -162,7 +172,7 @@ export function ShoppingListDetailPage() {
     const timeoutId = window.setTimeout(async () => {
       setIsSearching(true)
       try {
-        setSearchResponse(await searchRetailer(deferredSearchInput.trim(), controller.signal))
+        setSearchResponse(await searchRetailer(deferredSearchInput.trim(), currentSearchPage, controller.signal))
       } catch (searchError) {
         if (searchError instanceof DOMException && searchError.name === 'AbortError') {
           return
@@ -177,7 +187,7 @@ export function ShoppingListDetailPage() {
       controller.abort()
       window.clearTimeout(timeoutId)
     }
-  }, [deferredSearchInput])
+  }, [deferredSearchInput, currentSearchPage])
 
   const itemsInOrder = useMemo(() => [...(list?.items ?? [])].sort((left, right) => left.position - right.position), [list?.items])
   const uncheckedChecklistGroups = useMemo(
@@ -192,10 +202,27 @@ export function ShoppingListDetailPage() {
   const checkedCount = list?.items.reduce((sum, item) => sum + (item.checked ? item.quantity : 0), 0) ?? 0
   const pricedItemsTotal = useMemo(() => calculatePricedItemsTotal(list?.items ?? []), [list?.items])
   const manualSearchLabel = searchInput.trim()
+  const searchResults = searchResponse?.results ?? []
   const manualSearchItem = useMemo(
     () => (manualSearchLabel ? findMatchingManualSearchItem(list?.items ?? [], manualSearchLabel) : null),
     [list?.items, manualSearchLabel],
   )
+
+  function updateSearchValue(value: string) {
+    setSearchInput(value)
+    const nextSearchParams = new URLSearchParams(searchParams)
+    if (value) {
+      nextSearchParams.set('q', value)
+    } else {
+      nextSearchParams.delete('q')
+    }
+    if (currentView === 'search-expanded') {
+      nextSearchParams.set('page', '1')
+    } else {
+      nextSearchParams.delete('page')
+    }
+    setSearchParams(nextSearchParams, { replace: true })
+  }
 
   async function handleAddManualFromSearch() {
     if (!manualSearchLabel) {
@@ -367,17 +394,33 @@ export function ShoppingListDetailPage() {
               </section>
             ) : null}
 
-            {currentView === 'search' ? (
+            {currentView === 'search' || currentView === 'search-expanded' ? (
               <section className="screen-stack">
                 <div className="search-shell search-shell--top">
-                  <input
-                    ref={searchInputRef}
-                    aria-label="Sök artikel"
-                    className="search-input"
-                    placeholder="Lägg till produkt"
-                    value={searchInput}
-                    onChange={(event) => setSearchInput(event.target.value)}
-                  />
+                  <div className="search-input-wrap">
+                    <input
+                      ref={searchInputRef}
+                      aria-label="Sök artikel"
+                      className="search-input"
+                      placeholder="Lägg till produkt"
+                      value={searchInput}
+                      onChange={(event) => updateSearchValue(event.target.value)}
+                    />
+                    {searchInput ? (
+                      <button
+                        aria-label="Rensa sökning"
+                        className="search-clear"
+                        onClick={() => {
+                          updateSearchValue('')
+                          setSearchResponse(null)
+                          searchInputRef.current?.focus()
+                        }}
+                        type="button"
+                      >
+                        ×
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
 
                 <div className="catalog-list catalog-list--search">
@@ -411,7 +454,7 @@ export function ShoppingListDetailPage() {
                   ) : null}
 
                   <div className="catalog-list">
-                    {searchResponse?.results.map((result) => (
+                    {searchResults.map((result) => (
                       <article className="catalog-row" key={result.articleId}>
                         <div className="catalog-row__media">{renderSearchMedia(result)}</div>
                         <div className="catalog-row__content">
@@ -435,6 +478,20 @@ export function ShoppingListDetailPage() {
                       </article>
                     ))}
                   </div>
+
+                  {searchResponse?.hasMoreResults ? (
+                    <button
+                      aria-label={currentView === 'search-expanded' ? 'Visa nästa sida' : 'Visa fler träffar'}
+                      className="search-expand"
+                      onClick={() =>
+                        navigate(viewPath(actorName, listId, 'search-expanded', searchInput, currentSearchPage + 1))
+                      }
+                      type="button"
+                    >
+                      <span className="search-expand__icon">↓</span>
+                      <span>{currentView === 'search-expanded' ? 'Visa nästa sida' : 'Visa fler träffar'}</span>
+                    </button>
+                  ) : null}
                 </div>
               </section>
             ) : null}
@@ -534,6 +591,7 @@ function ChecklistItemRow({ isBusy, item, onToggleCheck, onToggleClaim, showDivi
   const [swipeOffset, setSwipeOffset] = useState(0)
   const swipeStartXRef = useRef<number | null>(null)
   const isSwipingRef = useRef(false)
+  const claimDisplayName = item.claimedByDisplayName ? toTitledName(item.claimedByDisplayName) : null
 
   const claimStyle = useMemo(() => {
     if (!item.claimedByDisplayName) {
@@ -624,7 +682,7 @@ function ChecklistItemRow({ isBusy, item, onToggleCheck, onToggleClaim, showDivi
       <div className="catalog-row__content">
         <strong>{item.title}</strong>
         {itemSubtitle(item) ? <p>{itemSubtitle(item)}</p> : null}
-        {item.claimedByDisplayName ? <p className="claim-label">{item.claimedByDisplayName} hämtar</p> : null}
+        {claimDisplayName ? <p className="claim-label">{claimDisplayName} hämtar</p> : null}
       </div>
       <div className="catalog-row__aside">
         <span className="checklist-quantity">{formatQuantity(item.quantity)}</span>
@@ -704,7 +762,7 @@ function labelForView(view: ViewMode) {
     return 'Varor'
   }
 
-  if (view === 'search') {
+  if (view === 'search' || view === 'search-expanded') {
     return 'Sök'
   }
 
@@ -712,6 +770,10 @@ function labelForView(view: ViewMode) {
 }
 
 function resolveView(pathname: string): ViewMode {
+  if (pathname.endsWith('/varor/search/fler')) {
+    return 'search-expanded'
+  }
+
   if (pathname.endsWith('/varor/search')) {
     return 'search'
   }
@@ -723,9 +785,22 @@ function resolveView(pathname: string): ViewMode {
   return 'items'
 }
 
-function viewPath(actorName: string, listId: string, view: ViewMode) {
+function viewPath(actorName: string, listId: string, view: ViewMode, searchQuery = '', page?: number) {
+  const searchParams = new URLSearchParams()
+  if (searchQuery) {
+    searchParams.set('q', searchQuery)
+  }
+  if (page !== undefined && page > 0) {
+    searchParams.set('page', String(page))
+  }
+  const searchSuffix = searchParams.size > 0 ? `?${searchParams.toString()}` : ''
+
+  if (view === 'search-expanded') {
+    return `/${actorName}/lists/${listId}/varor/search/fler${searchSuffix}`
+  }
+
   if (view === 'search') {
-    return `/${actorName}/lists/${listId}/varor/search`
+    return `/${actorName}/lists/${listId}/varor/search${searchSuffix}`
   }
 
   if (view === 'checklist') {
@@ -874,6 +949,27 @@ function claimPaletteStyle(displayName: string): CSSProperties {
     '--claim-border': `hsla(${hue}, 48%, 48%, 0.45)`,
     '--claim-text': `hsl(${hue}, 48%, 28%)`,
   } as CSSProperties
+}
+
+function toTitledName(displayName: string) {
+  if (!displayName) {
+    return displayName
+  }
+
+  return displayName.charAt(0).toLocaleUpperCase('sv-SE') + displayName.slice(1)
+}
+
+function resolveSearchPage(view: ViewMode, searchParams: URLSearchParams) {
+  if (view !== 'search-expanded') {
+    return 0
+  }
+
+  const rawValue = Number(searchParams.get('page') ?? '1')
+  if (!Number.isFinite(rawValue) || rawValue < 1) {
+    return 1
+  }
+
+  return Math.floor(rawValue)
 }
 
 function hashString(value: string) {

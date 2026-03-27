@@ -159,13 +159,7 @@ describe('ShoppingListDetailPage', () => {
     )
     fetchMock.mockResolvedValue(
       new Response(
-        JSON.stringify({
-          provider: 'willys',
-          query: 'Födelsedagsljus',
-          available: true,
-          message: null,
-          results: [],
-        }),
+        JSON.stringify(createSearchResponse('Födelsedagsljus', [], { totalPages: 0, totalResults: 0 })),
         {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
@@ -220,6 +214,77 @@ describe('ShoppingListDetailPage', () => {
 
     expect(await screen.findByText('Veckohandling')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '←' })).toHaveAttribute('href', '/anna/lists/list-1/varor')
+  })
+
+  it('clears the search input from the clear button', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(JSON.stringify(initialList), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+
+    render(
+      <MemoryRouter initialEntries={['/anna/lists/list-1/varor/search']}>
+        <AppShell />
+      </MemoryRouter>,
+    )
+
+    const searchInput = await screen.findByLabelText('Sök artikel')
+
+    await userEvent.type(searchInput, 'kaffe')
+    await userEvent.click(screen.getByRole('button', { name: 'Rensa sökning' }))
+
+    expect(searchInput).toHaveValue('')
+  })
+
+  it('expands search results onto a dedicated page', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify(initialList), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify(createSearchResponse('kaffe', [createRetailerResult('1', 'Kaffe 1')], { totalPages: 3, totalResults: 3 })),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+    )
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify(
+          createSearchResponse('kaffe', [createRetailerResult('2', 'Kaffe 2')], {
+            currentPage: 1,
+            totalPages: 3,
+            totalResults: 3,
+          }),
+        ),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+    )
+
+    render(
+      <MemoryRouter initialEntries={['/anna/lists/list-1/varor/search?q=kaffe']}>
+        <AppShell />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('Kaffe 1')).toBeInTheDocument()
+    expect(screen.queryByText('Kaffe 2')).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Visa fler träffar' }))
+
+    expect(await screen.findByText('Kaffe 2')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '←' })).toHaveAttribute('href', '/anna/lists/list-1/varor/search?q=kaffe')
+    expect(fetchMock).toHaveBeenCalledWith('/api/retailer-search?q=kaffe&page=1', expect.any(Object))
   })
 
   it('claims an unchecked checklist item when swiped left', async () => {
@@ -325,7 +390,7 @@ describe('ShoppingListDetailPage', () => {
     fireEvent.pointerMove(article!, { clientX: 110 })
     fireEvent.pointerUp(article!, { clientX: 110 })
 
-    expect(await screen.findByText('anna hämtar')).toBeInTheDocument()
+    expect(await screen.findByText('Anna hämtar')).toBeInTheDocument()
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
@@ -697,6 +762,47 @@ class MockWebSocket {
         data: JSON.stringify(payload),
       }),
     )
+  }
+}
+
+function createRetailerResult(articleId: string, title: string) {
+  return {
+    provider: 'willys',
+    articleId,
+    title,
+    subtitle: '500g',
+    imageUrl: null,
+    category: 'Dryck',
+    priceAmount: 39.9,
+    currency: 'SEK',
+    rawPayloadJson: '{}',
+  }
+}
+
+function createSearchResponse(
+  query: string,
+  results: ReturnType<typeof createRetailerResult>[],
+  overrides: Partial<{
+    currentPage: number
+    totalPages: number
+    totalResults: number
+    hasMoreResults: boolean
+    available: boolean
+    message: string | null
+  }> = {},
+) {
+  const currentPage = overrides.currentPage ?? 0
+  const totalPages = overrides.totalPages ?? 1
+  return {
+    provider: 'willys',
+    query,
+    currentPage,
+    totalPages,
+    totalResults: overrides.totalResults ?? results.length,
+    hasMoreResults: overrides.hasMoreResults ?? currentPage + 1 < totalPages,
+    available: overrides.available ?? true,
+    message: overrides.message ?? null,
+    results,
   }
 }
 

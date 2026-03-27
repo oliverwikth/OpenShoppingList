@@ -18,7 +18,10 @@ public class RetailerSearchController {
     }
 
     @GetMapping
-    RetailerSearchResponse search(@RequestParam("q") String query) {
-        return retailerSearchService.search(query);
+    RetailerSearchResponse search(
+            @RequestParam("q") String query,
+            @RequestParam(value = "page", defaultValue = "0") int page
+    ) {
+        return retailerSearchService.search(query, page);
     }
 }

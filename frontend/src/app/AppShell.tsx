@@ -10,6 +10,7 @@ export function AppShell() {
       <Route path="/:actorName/lists/:listId" element={<Navigate replace to="varor" />} />
       <Route path="/:actorName/lists/:listId/varor" element={<ShoppingListDetailPage />} />
       <Route path="/:actorName/lists/:listId/varor/search" element={<ShoppingListDetailPage />} />
+      <Route path="/:actorName/lists/:listId/varor/search/fler" element={<ShoppingListDetailPage />} />
       <Route path="/:actorName/lists/:listId/checklista" element={<ShoppingListDetailPage />} />
     </Routes>
   )

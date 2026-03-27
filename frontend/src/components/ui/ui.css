@@ -208,9 +208,62 @@
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.7);
 }
 
+.search-input-wrap {
+  position: relative;
+}
+
+.search-input-wrap .search-input {
+  padding-right: 52px;
+}
+
+.search-clear {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.4rem;
+  line-height: 1;
+  transform: translateY(-50%);
+}
+
 .search-input:focus {
   border-color: #abd2fa;
   box-shadow: 0 0 0 3px rgba(171, 210, 250, 0.3);
+}
+
+.search-clear:hover,
+.search-clear:focus-visible {
+  background: var(--surface-muted);
+  color: var(--text);
+  outline: none;
+}
+
+.search-expand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 46px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 16px;
+  margin: 4px auto 0;
+  background: var(--surface-muted);
+  color: var(--text);
+  font-weight: 700;
+}
+
+.search-expand__icon {
+  font-size: 1rem;
+  line-height: 1;
 }
 
 .search-input--button {
@@ -548,9 +601,17 @@
 
 .checklist-row__divider {
   grid-column: 1 / -1;
-  height: 1px;
-  background: var(--line);
-  margin-top: 12px;
+  height: 13px;
+  margin-top: 0;
+  background: linear-gradient(
+    to bottom,
+    var(--surface) 0,
+    var(--surface) 6px,
+    var(--line) 6px,
+    var(--line) 7px,
+    var(--surface) 7px,
+    var(--surface) 100%
+  );
 }
 
 .activity-row {

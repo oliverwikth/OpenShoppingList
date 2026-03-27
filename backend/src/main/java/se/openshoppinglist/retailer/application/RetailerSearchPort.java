@@ -4,5 +4,5 @@ import se.openshoppinglist.retailer.domain.RetailerSearchResponse;
 
 public interface RetailerSearchPort {
 
-    RetailerSearchResponse search(String query);
+    RetailerSearchResponse search(String query, int page);
 }
