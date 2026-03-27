@@ -56,17 +56,27 @@ public class ShoppingListCommandService {
 
     @Transactional
     public ShoppingListItem addManualItem(UUID listId, String title, String note, ActorDisplayName actorDisplayName) {
+        return addManualItem(listId, title, note, 1, actorDisplayName);
+    }
+
+    @Transactional
+    public ShoppingListItem addManualItem(UUID listId, String title, String note, int quantity, ActorDisplayName actorDisplayName) {
         ShoppingList shoppingList = requireList(listId);
-        ShoppingListItem item = shoppingList.addManualItem(title, note, actorDisplayName, clock);
+        ShoppingListItem item = shoppingList.addManualItem(title, note, quantity, actorDisplayName, clock);
         persistAndPublish(shoppingList);
         return item;
     }
 
     @Transactional
     public ShoppingListItem addExternalItem(UUID listId, ExternalArticleSnapshot snapshot, ActorDisplayName actorDisplayName) {
+        return addExternalItem(listId, snapshot, 1, actorDisplayName);
+    }
+
+    @Transactional
+    public ShoppingListItem addExternalItem(UUID listId, ExternalArticleSnapshot snapshot, int quantity, ActorDisplayName actorDisplayName) {
         ShoppingList shoppingList = requireList(listId);
         ExternalArticleSnapshot enrichedSnapshot = retailerArticleDetailsService.enrichSnapshot(snapshot);
-        ShoppingListItem item = shoppingList.addExternalItem(enrichedSnapshot, actorDisplayName, clock);
+        ShoppingListItem item = shoppingList.addExternalItem(enrichedSnapshot, quantity, actorDisplayName, clock);
         persistAndPublish(shoppingList);
         return item;
     }

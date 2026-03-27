@@ -86,18 +86,22 @@ public class ShoppingList extends AggregateRoot {
     }
 
     public ShoppingListItem addManualItem(String title, String note, ActorDisplayName actorDisplayName, Clock clock) {
+        return addManualItem(title, note, 1, actorDisplayName, clock);
+    }
+
+    public ShoppingListItem addManualItem(String title, String note, int quantity, ActorDisplayName actorDisplayName, Clock clock) {
         ensureActive();
         Optional<ShoppingListItem> existingItem = items.stream()
                 .filter(item -> item.matchesManual(title, note))
                 .findFirst();
         if (existingItem.isPresent()) {
             ShoppingListItem item = existingItem.get();
-            item.increaseQuantity(actorDisplayName, clock);
+            item.increaseQuantity(actorDisplayName, clock, quantity);
             touch(actorDisplayName, clock);
             recordEvent(new ShoppingDomainEvent("shopping-list-item.quantity-increased", id, item.getId(), actorDisplayName.value(), updatedAt));
             return item;
         }
-        ShoppingListItem item = ShoppingListItem.manual(this, nextPosition(), title, note, actorDisplayName, clock);
+        ShoppingListItem item = ShoppingListItem.manual(this, nextPosition(), title, note, quantity, actorDisplayName, clock);
         items.add(item);
         touch(actorDisplayName, clock);
         recordEvent(new ShoppingDomainEvent("shopping-list-item.added", id, item.getId(), actorDisplayName.value(), updatedAt));
@@ -105,18 +109,22 @@ public class ShoppingList extends AggregateRoot {
     }
 
     public ShoppingListItem addExternalItem(ExternalArticleSnapshot snapshot, ActorDisplayName actorDisplayName, Clock clock) {
+        return addExternalItem(snapshot, 1, actorDisplayName, clock);
+    }
+
+    public ShoppingListItem addExternalItem(ExternalArticleSnapshot snapshot, int quantity, ActorDisplayName actorDisplayName, Clock clock) {
         ensureActive();
         Optional<ShoppingListItem> existingItem = items.stream()
                 .filter(item -> item.matchesExternal(snapshot))
                 .findFirst();
         if (existingItem.isPresent()) {
             ShoppingListItem item = existingItem.get();
-            item.increaseQuantity(actorDisplayName, clock);
+            item.increaseQuantity(actorDisplayName, clock, quantity);
             touch(actorDisplayName, clock);
             recordEvent(new ShoppingDomainEvent("shopping-list-item.quantity-increased", id, item.getId(), actorDisplayName.value(), updatedAt));
             return item;
         }
-        ShoppingListItem item = ShoppingListItem.external(this, nextPosition(), snapshot, actorDisplayName, clock);
+        ShoppingListItem item = ShoppingListItem.external(this, nextPosition(), snapshot, quantity, actorDisplayName, clock);
         items.add(item);
         touch(actorDisplayName, clock);
         recordEvent(new ShoppingDomainEvent("shopping-list-item.added", id, item.getId(), actorDisplayName.value(), updatedAt));

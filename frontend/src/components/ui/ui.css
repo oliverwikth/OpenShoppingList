@@ -388,6 +388,10 @@
   gap: 18px;
 }
 
+.checklist-list {
+  gap: 10px;
+}
+
 .checklist-summary {
   padding: 2px 0 4px;
 }
@@ -400,7 +404,7 @@
 
 .checklist-section {
   display: grid;
-  gap: 10px;
+  gap: 12px;
 }
 
 .checklist-section--checked {
@@ -413,6 +417,7 @@
   margin: 0;
   padding: 0 2px;
   font-size: 1.2rem;
+  letter-spacing: -0.02em;
 }
 
 .catalog-row__media {
@@ -548,17 +553,11 @@
 
 .checklist-row--minimal {
   position: relative;
-  border-radius: 0;
-  padding: 12px 0;
-  background: transparent;
-}
-
-.checklist-row--minimal:first-child {
-  padding-top: 4px;
-}
-
-.checklist-row--minimal:last-child {
-  padding-bottom: 4px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 14px 16px;
+  background: white;
+  box-shadow: 0 10px 24px rgba(15, 7, 36, 0.04);
 }
 
 .checklist-row--minimal .catalog-row__media {
@@ -577,12 +576,15 @@
 
 .checklist-row--claimable {
   touch-action: pan-y;
-  transition: transform 150ms ease, background-color 180ms ease, box-shadow 180ms ease;
+  transition: transform 150ms ease, background-color 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
 }
 
 .checklist-row--claimable.is-claimed {
   background: var(--claim-bg);
-  box-shadow: inset 3px 0 0 var(--claim-border);
+  border-color: color-mix(in srgb, var(--claim-border) 75%, white);
+  box-shadow:
+    inset 4px 0 0 var(--claim-border),
+    0 10px 24px rgba(15, 7, 36, 0.05);
 }
 
 .checklist-quantity {
@@ -593,25 +595,11 @@
 }
 
 .claim-label {
-  margin: 2px 0 0;
+  margin: 4px 0 0;
   color: var(--claim-text, var(--muted));
-  font-size: 0.8rem;
+  font-size: 0.76rem;
   font-weight: 700;
-}
-
-.checklist-row__divider {
-  grid-column: 1 / -1;
-  height: 13px;
-  margin-top: 0;
-  background: linear-gradient(
-    to bottom,
-    var(--surface) 0,
-    var(--surface) 6px,
-    var(--line) 6px,
-    var(--line) 7px,
-    var(--surface) 7px,
-    var(--surface) 100%
-  );
+  letter-spacing: 0.01em;
 }
 
 .activity-row {

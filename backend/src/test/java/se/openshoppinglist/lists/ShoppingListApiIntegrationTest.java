@@ -143,6 +143,33 @@ class ShoppingListApiIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void addsManualItemWithRequestedQuantity() throws Exception {
+        MvcResult createListResult = mockMvc.perform(post("/api/lists")
+                        .header(ActorDisplayName.HEADER_NAME, "anna")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Veckohandling"}
+                                """))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        String listId = readId(createListResult);
+
+        mockMvc.perform(post("/api/lists/{listId}/items/manual", listId)
+                        .header(ActorDisplayName.HEADER_NAME, "anna")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"title":"Apelsiner","note":"","quantity":5}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.quantity").value(5));
+
+        mockMvc.perform(get("/api/lists/{listId}", listId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].quantity").value(5));
+    }
+
+    @Test
     void renamesExistingList() throws Exception {
         MvcResult createListResult = mockMvc.perform(post("/api/lists")
                         .header(ActorDisplayName.HEADER_NAME, "anna")

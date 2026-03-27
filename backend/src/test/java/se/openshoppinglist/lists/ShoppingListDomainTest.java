@@ -70,4 +70,20 @@ class ShoppingListDomainTest {
                         "shopping-list-item.removed"
                 );
     }
+
+    @Test
+    void addsBatchedQuantityInSingleOperation() {
+        ShoppingList shoppingList = ShoppingList.create("Veckohandling", new ActorDisplayName("anna"), FIXED_CLOCK);
+
+        ShoppingListItem item = shoppingList.addManualItem("Apelsiner", "", 5, new ActorDisplayName("anna"), FIXED_CLOCK);
+
+        assertThat(shoppingList.getItems()).hasSize(1);
+        assertThat(item.getQuantity()).isEqualTo(5);
+        assertThat(shoppingList.pullDomainEvents())
+                .extracting("eventType")
+                .containsExactly(
+                        "shopping-list.created",
+                        "shopping-list-item.added"
+                );
+    }
 }

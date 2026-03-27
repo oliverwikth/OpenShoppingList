@@ -101,6 +101,18 @@ public class ShoppingListItem {
             ActorDisplayName actorDisplayName,
             Clock clock
     ) {
+        return manual(shoppingList, position, title, note, 1, actorDisplayName, clock);
+    }
+
+    static ShoppingListItem manual(
+            ShoppingList shoppingList,
+            int position,
+            String title,
+            String note,
+            int quantity,
+            ActorDisplayName actorDisplayName,
+            Clock clock
+    ) {
         Instant now = clock.instant();
         ShoppingListItem item = new ShoppingListItem();
         item.id = UUID.randomUUID();
@@ -113,7 +125,7 @@ public class ShoppingListItem {
         item.createdAt = now;
         item.updatedAt = now;
         item.position = position;
-        item.quantity = 1;
+        item.quantity = normalizeQuantity(quantity);
         item.sourcePayloadJson = "{}";
         return item;
     }
@@ -122,6 +134,17 @@ public class ShoppingListItem {
             ShoppingList shoppingList,
             int position,
             ExternalArticleSnapshot snapshot,
+            ActorDisplayName actorDisplayName,
+            Clock clock
+    ) {
+        return external(shoppingList, position, snapshot, 1, actorDisplayName, clock);
+    }
+
+    static ShoppingListItem external(
+            ShoppingList shoppingList,
+            int position,
+            ExternalArticleSnapshot snapshot,
+            int quantity,
             ActorDisplayName actorDisplayName,
             Clock clock
     ) {
@@ -136,7 +159,7 @@ public class ShoppingListItem {
         item.createdAt = now;
         item.updatedAt = now;
         item.position = position;
-        item.quantity = 1;
+        item.quantity = normalizeQuantity(quantity);
         item.sourceProvider = snapshot.provider();
         item.sourceArticleId = snapshot.articleId();
         item.sourceImageUrl = snapshot.imageUrl();
@@ -176,7 +199,11 @@ public class ShoppingListItem {
     }
 
     void increaseQuantity(ActorDisplayName actorDisplayName, Clock clock) {
-        quantity += 1;
+        increaseQuantity(actorDisplayName, clock, 1);
+    }
+
+    void increaseQuantity(ActorDisplayName actorDisplayName, Clock clock, int amount) {
+        quantity += normalizeQuantity(amount);
         clearCheckState();
         lastModifiedByDisplayName = actorDisplayName.value();
         updatedAt = clock.instant();
@@ -366,5 +393,12 @@ public class ShoppingListItem {
 
     private static String normalizeValue(String rawValue) {
         return rawValue == null ? "" : rawValue.trim();
+    }
+
+    private static int normalizeQuantity(int quantity) {
+        if (quantity < 1) {
+            throw new IllegalArgumentException("Item quantity must be at least 1.");
+        }
+        return quantity;
     }
 }

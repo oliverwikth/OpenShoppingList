@@ -120,79 +120,232 @@ describe('ShoppingListDetailPage', () => {
     expect(content.indexOf('Avprickade varor')).toBeLessThan(content.indexOf('Mjolk'))
   })
 
-  it('adds a manual item from the search screen and reloads the list detail', async () => {
+  it('buffers manual search adds until the search is cleared', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch')
-    fetchMock.mockResolvedValueOnce(
-      new Response(JSON.stringify(initialList), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      }),
-    )
-    fetchMock.mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({
-          id: 'item-1',
-          itemType: 'EXTERNAL_ARTICLE',
-          title: 'Födelsedagsljus',
-          checked: false,
-          checkedAt: null,
-          checkedByDisplayName: null,
-          lastModifiedByDisplayName: 'anna',
-          createdAt: '2026-03-26T18:05:00Z',
-          updatedAt: '2026-03-26T18:05:00Z',
-          position: 1,
-          quantity: 1,
-          manualNote: '',
-          externalSnapshot: null,
-        }),
-        {
+    let listFetchCount = 0
+
+    fetchMock.mockImplementation(async (input, init) => {
+      const url = String(input)
+
+      if (url === '/api/lists/list-1' && (!init?.method || init.method === 'GET')) {
+        listFetchCount += 1
+        return new Response(JSON.stringify(listFetchCount === 1 ? initialList : {
+          ...updatedList,
+          items: [
+            {
+              ...updatedList.items[0],
+              quantity: 3,
+            },
+          ],
+        }), {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
-        },
-      ),
-    )
-    fetchMock.mockResolvedValueOnce(
-      new Response(JSON.stringify(updatedList), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      }),
-    )
-    fetchMock.mockResolvedValue(
-      new Response(
-        JSON.stringify(createSearchResponse('Födelsedagsljus', [], { totalPages: 0, totalResults: 0 })),
-        {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        },
-      ),
-    )
+        })
+      }
+
+      if (url.startsWith('/api/retailer-search?q=F%C3%B6delsedagsljus&page=0')) {
+        return new Response(
+          JSON.stringify(createSearchResponse('Födelsedagsljus', [], { totalPages: 0, totalResults: 0 })),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        )
+      }
+
+      if (url === '/api/lists/list-1/items/manual') {
+        return new Response(
+          JSON.stringify({
+            id: 'item-1',
+            itemType: 'MANUAL',
+            title: 'Födelsedagsljus',
+            checked: false,
+            checkedAt: null,
+            checkedByDisplayName: null,
+            lastModifiedByDisplayName: 'anna',
+            createdAt: '2026-03-26T18:05:00Z',
+            updatedAt: '2026-03-26T18:05:00Z',
+            position: 1,
+            quantity: 3,
+            manualNote: '',
+            externalSnapshot: null,
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        )
+      }
+
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
 
     render(
-      <MemoryRouter initialEntries={['/anna/lists/list-1/varor']}>
+      <MemoryRouter initialEntries={['/anna/lists/list-1/varor/search']}>
         <AppShell />
       </MemoryRouter>,
     )
 
     expect(await screen.findByText('Veckohandling')).toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('button', { name: 'Öppna sök' }))
     await userEvent.type(screen.getByLabelText('Sök artikel'), 'Födelsedagsljus')
     await userEvent.click(screen.getByRole('button', { name: 'Lägg till Födelsedagsljus' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Öka Födelsedagsljus' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Öka Födelsedagsljus' }))
 
-    expect(screen.getByLabelText('Sök artikel')).toHaveValue('Födelsedagsljus')
-    expect(await screen.findByRole('button', { name: 'Minska Födelsedagsljus' })).toBeInTheDocument()
-    expect(await screen.findByRole('button', { name: 'Öka Födelsedagsljus' })).toBeInTheDocument()
-    expect(await screen.findByText('Födelsedagsljus')).toBeInTheDocument()
-    expect(await screen.findByText('1')).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'Antal för Födelsedagsljus' })).toHaveTextContent('3')
+    expect(fetchMock.mock.calls.filter(([url]) => url === '/api/lists/list-1/items/manual')).toHaveLength(0)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Rensa sökning' }))
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(
-        '/api/lists/list-1/items/manual',
+      const manualPosts = fetchMock.mock.calls.filter(([url]) => url === '/api/lists/list-1/items/manual')
+      expect(manualPosts).toHaveLength(1)
+      expect(manualPosts[0][1]).toEqual(
         expect.objectContaining({
-          method: 'POST',
+          body: JSON.stringify({
+            title: 'Födelsedagsljus',
+            note: '',
+            quantity: 3,
+          }),
           headers: expect.objectContaining({
             'X-Actor-Display-Name': 'anna',
           }),
+          method: 'POST',
+        }),
+      )
+    })
+  })
+
+  it('buffers repeated retailer result adds and flushes them as one request', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    let listFetchCount = 0
+
+    fetchMock.mockImplementation(async (input, init) => {
+      const url = String(input)
+
+      if (url === '/api/lists/list-1' && (!init?.method || init.method === 'GET')) {
+        listFetchCount += 1
+        return new Response(JSON.stringify(listFetchCount === 1 ? initialList : {
+          ...initialList,
+          items: [
+            {
+              id: 'item-1',
+              itemType: 'EXTERNAL_ARTICLE',
+              title: 'Kaffe 1',
+              checked: false,
+              checkedAt: null,
+              checkedByDisplayName: null,
+              lastModifiedByDisplayName: 'anna',
+              createdAt: '2026-03-26T18:05:00Z',
+              updatedAt: '2026-03-26T18:05:00Z',
+              position: 1,
+              quantity: 5,
+              manualNote: '',
+              externalSnapshot: {
+                provider: 'willys',
+                articleId: '1',
+                subtitle: '500g',
+                imageUrl: null,
+                category: 'Dryck',
+                priceAmount: 39.9,
+                currency: 'SEK',
+              },
+            },
+          ],
+          recentActivities: [],
+        }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+
+      if (url.startsWith('/api/retailer-search?q=kaffe&page=0')) {
+        return new Response(
+          JSON.stringify(createSearchResponse('kaffe', [createRetailerResult('1', 'Kaffe 1')], { totalPages: 1, totalResults: 1 })),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        )
+      }
+
+      if (url === '/api/lists/list-1/items/external') {
+        return new Response(
+          JSON.stringify({
+            id: 'item-1',
+            itemType: 'EXTERNAL_ARTICLE',
+            title: 'Kaffe 1',
+            checked: false,
+            checkedAt: null,
+            checkedByDisplayName: null,
+            lastModifiedByDisplayName: 'anna',
+            createdAt: '2026-03-26T18:05:00Z',
+            updatedAt: '2026-03-26T18:05:00Z',
+            position: 1,
+            quantity: 5,
+            manualNote: '',
+            externalSnapshot: {
+              provider: 'willys',
+              articleId: '1',
+              subtitle: '500g',
+              imageUrl: null,
+              category: 'Dryck',
+              priceAmount: 39.9,
+              currency: 'SEK',
+            },
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        )
+      }
+
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+
+    render(
+      <MemoryRouter initialEntries={['/anna/lists/list-1/varor/search']}>
+        <AppShell />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('Veckohandling')).toBeInTheDocument()
+
+    await userEvent.type(screen.getByLabelText('Sök artikel'), 'kaffe')
+    await userEvent.click(await screen.findByRole('button', { name: 'Lägg till Kaffe 1' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Öka Kaffe 1' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Öka Kaffe 1' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Öka Kaffe 1' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Öka Kaffe 1' }))
+
+    expect(screen.getByRole('group', { name: 'Antal för Kaffe 1' })).toHaveTextContent('5')
+    expect(fetchMock.mock.calls.filter(([url]) => url === '/api/lists/list-1/items/external')).toHaveLength(0)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Rensa sökning' }))
+
+    await waitFor(() => {
+      const externalPosts = fetchMock.mock.calls.filter(([url]) => url === '/api/lists/list-1/items/external')
+      expect(externalPosts).toHaveLength(1)
+      expect(externalPosts[0][1]).toEqual(
+        expect.objectContaining({
+          body: JSON.stringify({
+            provider: 'willys',
+            articleId: '1',
+            title: 'Kaffe 1',
+            subtitle: '500g',
+            imageUrl: null,
+            category: 'Dryck',
+            priceAmount: 39.9,
+            currency: 'SEK',
+            rawPayloadJson: '{}',
+            quantity: 5,
+          }),
+          headers: expect.objectContaining({
+            'X-Actor-Display-Name': 'anna',
+          }),
+          method: 'POST',
         }),
       )
     })
@@ -238,7 +391,7 @@ describe('ShoppingListDetailPage', () => {
     expect(searchInput).toHaveValue('')
   })
 
-  it('expands search results onto a dedicated page', async () => {
+  it('appends the next search page instead of replacing the first results', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch')
     fetchMock.mockResolvedValueOnce(
       new Response(JSON.stringify(initialList), {
@@ -282,6 +435,7 @@ describe('ShoppingListDetailPage', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Visa fler träffar' }))
 
+    expect(await screen.findByText('Kaffe 1')).toBeInTheDocument()
     expect(await screen.findByText('Kaffe 2')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '←' })).toHaveAttribute('href', '/anna/lists/list-1/varor/search?q=kaffe')
     expect(fetchMock).toHaveBeenCalledWith('/api/retailer-search?q=kaffe&page=1', expect.any(Object))

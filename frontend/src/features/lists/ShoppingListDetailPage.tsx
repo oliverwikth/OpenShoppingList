@@ -20,6 +20,26 @@ interface ItemGroup {
   items: ShoppingListItem[]
 }
 
+interface SearchResultsState {
+  query: string
+  pages: Record<number, RetailerSearchResponse>
+}
+
+interface PendingManualSearchAdd {
+  kind: 'manual'
+  note: string
+  quantity: number
+  title: string
+}
+
+interface PendingExternalSearchAdd {
+  kind: 'external'
+  quantity: number
+  result: RetailerSearchResult
+}
+
+type PendingSearchAdd = PendingManualSearchAdd | PendingExternalSearchAdd
+
 const ROOT_VIEW_ORDER: Exclude<ViewMode, 'search'>[] = ['items', 'checklist']
 
 export function ShoppingListDetailPage() {
@@ -31,12 +51,16 @@ export function ShoppingListDetailPage() {
   const [list, setList] = useState<ShoppingListDetail | null>(null)
   const [searchInput, setSearchInput] = useState(searchParams.get('q') ?? '')
   const deferredSearchInput = useDeferredValue(searchInput)
-  const [searchResponse, setSearchResponse] = useState<RetailerSearchResponse | null>(null)
+  const [searchResultsState, setSearchResultsState] = useState<SearchResultsState>({ query: '', pages: {} })
   const [isLoading, setIsLoading] = useState(true)
   const [isSearching, setIsSearching] = useState(false)
+  const [isFlushingSearchAdds, setIsFlushingSearchAdds] = useState(false)
+  const [pendingSearchAdds, setPendingSearchAdds] = useState<Record<string, PendingSearchAdd>>({})
   const [pendingActionKey, setPendingActionKey] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
+  const pendingSearchAddsRef = useRef<Record<string, PendingSearchAdd>>({})
+  const searchResultsStateRef = useRef<SearchResultsState>({ query: '', pages: {} })
   const reconnectTimeoutRef = useRef<number | null>(null)
   const pollingIntervalRef = useRef<number | null>(null)
 
@@ -48,6 +72,7 @@ export function ShoppingListDetailPage() {
     : currentView === 'search'
       ? viewPath(actorName, listId, 'items')
       : `/${actorName}`
+  const previousSearchSessionRef = useRef({ searchInput, view: currentView })
 
   const loadList = useEffectEvent(async (options: { background?: boolean } = {}) => {
     if (!options.background || list === null) {
@@ -68,6 +93,8 @@ export function ShoppingListDetailPage() {
   })
 
   useEffect(() => {
+    pendingSearchAddsRef.current = {}
+    setPendingSearchAdds({})
     void loadList()
   }, [listId])
 
@@ -149,6 +176,48 @@ export function ShoppingListDetailPage() {
     setSearchInput(searchParams.get('q') ?? '')
   }, [searchParams])
 
+  const flushPendingSearchAdds = useEffectEvent(async () => {
+    const pendingEntries = Object.values(pendingSearchAddsRef.current)
+    if (!pendingEntries.length) {
+      return
+    }
+
+    setIsFlushingSearchAdds(true)
+    setError(null)
+    try {
+      await Promise.all(
+        pendingEntries.map((pendingAdd) =>
+          pendingAdd.kind === 'manual'
+            ? addManualItem(actorName, listId, pendingAdd.title, pendingAdd.note, pendingAdd.quantity)
+            : addExternalItem(actorName, listId, pendingAdd.result, pendingAdd.quantity),
+        ),
+      )
+      pendingSearchAddsRef.current = {}
+      setPendingSearchAdds({})
+      await loadList()
+    } catch (flushError) {
+      setError(flushError instanceof Error ? flushError.message : 'Kunde inte spara sökvalen.')
+    } finally {
+      setIsFlushingSearchAdds(false)
+    }
+  })
+
+  useEffect(() => {
+    const previousSearchSession = previousSearchSessionRef.current
+    const clearedSearch =
+      isSearchViewMode(previousSearchSession.view) &&
+      isSearchViewMode(currentView) &&
+      previousSearchSession.searchInput.trim().length > 0 &&
+      searchInput.trim().length === 0
+    const leftSearch = isSearchViewMode(previousSearchSession.view) && !isSearchViewMode(currentView)
+
+    previousSearchSessionRef.current = { searchInput, view: currentView }
+
+    if (clearedSearch || leftSearch) {
+      void flushPendingSearchAdds()
+    }
+  }, [currentView, flushPendingSearchAdds, searchInput])
+
   useEffect(() => {
     if (currentView !== 'search') {
       return
@@ -163,7 +232,9 @@ export function ShoppingListDetailPage() {
 
   useEffect(() => {
     if (deferredSearchInput.trim().length < 2) {
-      setSearchResponse(null)
+      const emptyState = { query: deferredSearchInput.trim(), pages: {} }
+      searchResultsStateRef.current = emptyState
+      setSearchResultsState(emptyState)
       setIsSearching(false)
       return
     }
@@ -172,7 +243,25 @@ export function ShoppingListDetailPage() {
     const timeoutId = window.setTimeout(async () => {
       setIsSearching(true)
       try {
-        setSearchResponse(await searchRetailer(deferredSearchInput.trim(), currentSearchPage, controller.signal))
+        const nextState =
+          searchResultsStateRef.current.query === deferredSearchInput.trim()
+            ? {
+                query: deferredSearchInput.trim(),
+                pages: { ...searchResultsStateRef.current.pages },
+              }
+            : {
+                query: deferredSearchInput.trim(),
+                pages: {},
+              }
+
+        for (let page = 0; page <= currentSearchPage; page += 1) {
+          if (!nextState.pages[page]) {
+            nextState.pages[page] = await searchRetailer(deferredSearchInput.trim(), page, controller.signal)
+          }
+        }
+
+        searchResultsStateRef.current = nextState
+        setSearchResultsState(nextState)
       } catch (searchError) {
         if (searchError instanceof DOMException && searchError.name === 'AbortError') {
           return
@@ -202,11 +291,69 @@ export function ShoppingListDetailPage() {
   const checkedCount = list?.items.reduce((sum, item) => sum + (item.checked ? item.quantity : 0), 0) ?? 0
   const pricedItemsTotal = useMemo(() => calculatePricedItemsTotal(list?.items ?? []), [list?.items])
   const manualSearchLabel = searchInput.trim()
+  const searchResponse = useMemo(() => {
+    if (searchResultsState.query !== manualSearchLabel) {
+      return null
+    }
+
+    const responses = Array.from({ length: currentSearchPage + 1 }, (_, page) => searchResultsState.pages[page]).filter(
+      (response): response is RetailerSearchResponse => response !== undefined,
+    )
+
+    if (!responses.length) {
+      return null
+    }
+
+    const latestResponse = responses[responses.length - 1]
+    return {
+      ...latestResponse,
+      results: responses.flatMap((response) => response.results),
+    }
+  }, [currentSearchPage, manualSearchLabel, searchResultsState])
   const searchResults = searchResponse?.results ?? []
   const manualSearchItem = useMemo(
     () => (manualSearchLabel ? findMatchingManualSearchItem(list?.items ?? [], manualSearchLabel) : null),
     [list?.items, manualSearchLabel],
   )
+  const manualSearchActionKey = manualSearchKey(manualSearchLabel)
+  const manualSearchQuantity = searchSelectionQuantity(manualSearchItem, pendingSearchAdds[manualSearchActionKey])
+
+  function setPendingSearchAddsState(nextPendingSearchAdds: Record<string, PendingSearchAdd>) {
+    pendingSearchAddsRef.current = nextPendingSearchAdds
+    setPendingSearchAdds(nextPendingSearchAdds)
+  }
+
+  function incrementPendingSearchAdd(actionKey: string, pendingAdd: PendingSearchAdd) {
+    const currentPendingAdd = pendingSearchAddsRef.current[actionKey]
+    setPendingSearchAddsState({
+      ...pendingSearchAddsRef.current,
+      [actionKey]: {
+        ...pendingAdd,
+        quantity: (currentPendingAdd?.quantity ?? 0) + 1,
+      },
+    })
+  }
+
+  function decrementPendingSearchAdd(actionKey: string) {
+    const currentPendingAdd = pendingSearchAddsRef.current[actionKey]
+    if (!currentPendingAdd) {
+      return
+    }
+
+    if (currentPendingAdd.quantity <= 1) {
+      const { [actionKey]: _ignored, ...remainingPendingSearchAdds } = pendingSearchAddsRef.current
+      setPendingSearchAddsState(remainingPendingSearchAdds)
+      return
+    }
+
+    setPendingSearchAddsState({
+      ...pendingSearchAddsRef.current,
+      [actionKey]: {
+        ...currentPendingAdd,
+        quantity: currentPendingAdd.quantity - 1,
+      },
+    })
+  }
 
   function updateSearchValue(value: string) {
     setSearchInput(value)
@@ -224,33 +371,47 @@ export function ShoppingListDetailPage() {
     setSearchParams(nextSearchParams, { replace: true })
   }
 
-  async function handleAddManualFromSearch() {
+  function handleAddManualFromSearch() {
     if (!manualSearchLabel) {
       return
     }
 
-    setPendingActionKey(manualSearchKey(manualSearchLabel))
-    setError(null)
-    try {
-      await addManualItem(actorName, listId, manualSearchLabel, '')
-      await loadList()
-    } catch (addError) {
-      setError(addError instanceof Error ? addError.message : 'Kunde inte lägga till fritext.')
-    } finally {
-      setPendingActionKey(null)
+    incrementPendingSearchAdd(manualSearchActionKey, {
+      kind: 'manual',
+      note: '',
+      quantity: 1,
+      title: manualSearchLabel,
+    })
+  }
+
+  function handleAddRetailerItem(result: RetailerSearchResult) {
+    incrementPendingSearchAdd(externalSearchKey(result), {
+      kind: 'external',
+      quantity: 1,
+      result,
+    })
+  }
+
+  async function handleDecreaseManualFromSearch() {
+    if (pendingSearchAddsRef.current[manualSearchActionKey]) {
+      decrementPendingSearchAdd(manualSearchActionKey)
+      return
+    }
+
+    if (manualSearchItem) {
+      await handleDecreaseItem(manualSearchItem, itemActionKey(manualSearchItem))
     }
   }
 
-  async function handleAddRetailerItem(result: RetailerSearchResult) {
-    setPendingActionKey(externalSearchKey(result))
-    setError(null)
-    try {
-      await addExternalItem(actorName, listId, result)
-      await loadList()
-    } catch (addError) {
-      setError(addError instanceof Error ? addError.message : 'Kunde inte lägga till artikeln.')
-    } finally {
-      setPendingActionKey(null)
+  async function handleDecreaseRetailerItemFromSearch(result: RetailerSearchResult, item: ShoppingListItem | null) {
+    const actionKey = externalSearchKey(result)
+    if (pendingSearchAddsRef.current[actionKey]) {
+      decrementPendingSearchAdd(actionKey)
+      return
+    }
+
+    if (item) {
+      await handleDecreaseItem(item, itemActionKey(item))
     }
   }
 
@@ -372,17 +533,16 @@ export function ShoppingListDetailPage() {
                             </div>
                           </div>
                           <div className="catalog-row__aside catalog-row__aside--stack">
-                          <QuantityAction
-                            actionKey={itemActionKey(item)}
-                            isPending={pendingActionKey === itemActionKey(item)}
-                            item={item}
-                            onDecrease={handleDecreaseItem}
-                            onIncrease={() => void handleIncreaseExistingItem(item)}
-                            title={item.title}
-                          />
-                        </div>
-                      </article>
-                    ))}
+                            <QuantityAction
+                              count={item.quantity}
+                              isPending={pendingActionKey === itemActionKey(item)}
+                              onDecrease={() => void handleDecreaseItem(item, itemActionKey(item))}
+                              onIncrease={() => void handleIncreaseExistingItem(item)}
+                              title={item.title}
+                            />
+                          </div>
+                        </article>
+                      ))}
                     </div>
 
                     <section className="total-bar" aria-label="Totalpris">
@@ -412,7 +572,8 @@ export function ShoppingListDetailPage() {
                         className="search-clear"
                         onClick={() => {
                           updateSearchValue('')
-                          setSearchResponse(null)
+                          searchResultsStateRef.current = { query: '', pages: {} }
+                          setSearchResultsState({ query: '', pages: {} })
                           searchInputRef.current?.focus()
                         }}
                         type="button"
@@ -433,10 +594,9 @@ export function ShoppingListDetailPage() {
                       </div>
                       <div className="catalog-row__aside">
                         <QuantityAction
-                          actionKey={manualSearchKey(manualSearchLabel)}
-                          isPending={pendingActionKey === manualSearchKey(manualSearchLabel)}
-                          item={manualSearchItem}
-                          onDecrease={handleDecreaseItem}
+                          count={manualSearchQuantity}
+                          isPending={isFlushingSearchAdds || (manualSearchItem ? pendingActionKey === itemActionKey(manualSearchItem) : false)}
+                          onDecrease={manualSearchQuantity > 0 ? handleDecreaseManualFromSearch : undefined}
                           onIncrease={handleAddManualFromSearch}
                           title={manualSearchLabel}
                         />
@@ -454,34 +614,38 @@ export function ShoppingListDetailPage() {
                   ) : null}
 
                   <div className="catalog-list">
-                    {searchResults.map((result) => (
-                      <article className="catalog-row" key={result.articleId}>
-                        <div className="catalog-row__media">{renderSearchMedia(result)}</div>
-                        <div className="catalog-row__content">
-                          <strong>{result.title}</strong>
-                          <p>{result.subtitle ?? result.category ?? 'Butiksartikel'}</p>
-                          <div className="catalog-row__meta">
-                            {result.category ? <span>{result.category}</span> : null}
-                            {result.priceAmount !== null ? <span>{formatPrice(result.priceAmount, result.currency)}</span> : null}
+                    {searchResults.map((result) => {
+                      const matchingItem = findMatchingExternalSearchItem(list?.items ?? [], result)
+                      const quantity = searchSelectionQuantity(matchingItem, pendingSearchAdds[externalSearchKey(result)])
+
+                      return (
+                        <article className="catalog-row" key={result.articleId}>
+                          <div className="catalog-row__media">{renderSearchMedia(result)}</div>
+                          <div className="catalog-row__content">
+                            <strong>{result.title}</strong>
+                            <p>{result.subtitle ?? result.category ?? 'Butiksartikel'}</p>
+                            <div className="catalog-row__meta">
+                              {result.category ? <span>{result.category}</span> : null}
+                              {result.priceAmount !== null ? <span>{formatPrice(result.priceAmount, result.currency)}</span> : null}
+                            </div>
                           </div>
-                        </div>
-                        <div className="catalog-row__aside">
-                          <QuantityAction
-                            actionKey={externalSearchKey(result)}
-                            isPending={pendingActionKey === externalSearchKey(result)}
-                            item={findMatchingExternalSearchItem(list?.items ?? [], result)}
-                            onDecrease={handleDecreaseItem}
-                            onIncrease={() => void handleAddRetailerItem(result)}
-                            title={result.title}
-                          />
-                        </div>
-                      </article>
-                    ))}
+                          <div className="catalog-row__aside">
+                            <QuantityAction
+                              count={quantity}
+                              isPending={isFlushingSearchAdds || (matchingItem ? pendingActionKey === itemActionKey(matchingItem) : false)}
+                              onDecrease={quantity > 0 ? () => void handleDecreaseRetailerItemFromSearch(result, matchingItem) : undefined}
+                              onIncrease={() => void handleAddRetailerItem(result)}
+                              title={result.title}
+                            />
+                          </div>
+                        </article>
+                      )
+                    })}
                   </div>
 
                   {searchResponse?.hasMoreResults ? (
                     <button
-                      aria-label={currentView === 'search-expanded' ? 'Visa nästa sida' : 'Visa fler träffar'}
+                      aria-label="Visa fler träffar"
                       className="search-expand"
                       onClick={() =>
                         navigate(viewPath(actorName, listId, 'search-expanded', searchInput, currentSearchPage + 1))
@@ -489,7 +653,7 @@ export function ShoppingListDetailPage() {
                       type="button"
                     >
                       <span className="search-expand__icon">↓</span>
-                      <span>{currentView === 'search-expanded' ? 'Visa nästa sida' : 'Visa fler träffar'}</span>
+                      <span>Visa fler träffar</span>
                     </button>
                   ) : null}
                 </div>
@@ -514,14 +678,13 @@ export function ShoppingListDetailPage() {
                   <section className="checklist-section" key={group.title}>
                     <h2 className="checklist-section__title">{group.title}</h2>
                     <div className="checklist-list">
-                      {group.items.map((item, index) => (
+                      {group.items.map((item) => (
                         <ChecklistItemRow
                           isBusy={pendingActionKey === item.id || pendingActionKey === claimActionKey(item.id)}
                           item={item}
                           key={item.id}
                           onToggleCheck={handleToggleItem}
                           onToggleClaim={handleToggleClaim}
-                          showDivider={index < group.items.length - 1}
                         />
                       ))}
                     </div>
@@ -532,7 +695,7 @@ export function ShoppingListDetailPage() {
                   <section className="checklist-section checklist-section--checked">
                     <h2 className="checklist-section__title">Avprickade varor</h2>
                     <div className="checklist-list">
-                      {checkedChecklistItems.map((item, index) => (
+                      {checkedChecklistItems.map((item) => (
                         <article className="checklist-row checklist-row--minimal is-checked" key={item.id}>
                           <button
                             aria-label={`Avmarkera ${item.title}`}
@@ -551,7 +714,6 @@ export function ShoppingListDetailPage() {
                           <div className="catalog-row__aside">
                             <span className="checklist-quantity">{formatQuantity(item.quantity)}</span>
                           </div>
-                          {index < checkedChecklistItems.length - 1 ? <div className="checklist-row__divider" /> : null}
                         </article>
                       ))}
                     </div>
@@ -584,10 +746,9 @@ interface ChecklistItemRowProps {
   item: ShoppingListItem
   onToggleCheck: (item: ShoppingListItem) => Promise<void>
   onToggleClaim: (item: ShoppingListItem) => Promise<void>
-  showDivider: boolean
 }
 
-function ChecklistItemRow({ isBusy, item, onToggleCheck, onToggleClaim, showDivider }: ChecklistItemRowProps) {
+function ChecklistItemRow({ isBusy, item, onToggleCheck, onToggleClaim }: ChecklistItemRowProps) {
   const [swipeOffset, setSwipeOffset] = useState(0)
   const swipeStartXRef = useRef<number | null>(null)
   const isSwipingRef = useRef(false)
@@ -687,7 +848,6 @@ function ChecklistItemRow({ isBusy, item, onToggleCheck, onToggleClaim, showDivi
       <div className="catalog-row__aside">
         <span className="checklist-quantity">{formatQuantity(item.quantity)}</span>
       </div>
-      {showDivider ? <div className="checklist-row__divider" /> : null}
     </article>
   )
 }
@@ -709,16 +869,15 @@ function renderSearchMedia(result: RetailerSearchResult) {
 }
 
 interface QuantityActionProps {
-  actionKey: string
+  count: number
   isPending: boolean
-  item: ShoppingListItem | null
-  onDecrease: (item: ShoppingListItem, actionKey: string) => Promise<void>
+  onDecrease?: (() => void | Promise<void>) | undefined
   onIncrease: () => void | Promise<void>
   title: string
 }
 
-function QuantityAction({ actionKey, isPending, item, onDecrease, onIncrease, title }: QuantityActionProps) {
-  if (!item) {
+function QuantityAction({ count, isPending, onDecrease, onIncrease, title }: QuantityActionProps) {
+  if (count < 1 || !onDecrease) {
     return (
       <button
         aria-label={`Lägg till ${title}`}
@@ -738,12 +897,12 @@ function QuantityAction({ actionKey, isPending, item, onDecrease, onIncrease, ti
         aria-label={`Minska ${title}`}
         className="quantity-stepper__button"
         disabled={isPending}
-        onClick={() => void onDecrease(item, actionKey)}
+        onClick={() => void onDecrease()}
         type="button"
       >
         -
       </button>
-      <span className="quantity-stepper__count">{item.quantity}</span>
+      <span className="quantity-stepper__count">{count}</span>
       <button
         aria-label={`Öka ${title}`}
         className="quantity-stepper__button"
@@ -767,6 +926,10 @@ function labelForView(view: ViewMode) {
   }
 
   return 'Checklista'
+}
+
+function isSearchViewMode(view: ViewMode) {
+  return view === 'search' || view === 'search-expanded'
 }
 
 function resolveView(pathname: string): ViewMode {
@@ -940,6 +1103,10 @@ function manualSearchKey(title: string) {
 
 function externalSearchKey(result: RetailerSearchResult) {
   return `external:${result.provider}:${result.articleId}`
+}
+
+function searchSelectionQuantity(item: ShoppingListItem | null, pendingAdd: PendingSearchAdd | undefined) {
+  return (item?.quantity ?? 0) + (pendingAdd?.quantity ?? 0)
 }
 
 function claimPaletteStyle(displayName: string): CSSProperties {

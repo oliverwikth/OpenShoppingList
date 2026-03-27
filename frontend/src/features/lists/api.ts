@@ -30,15 +30,15 @@ export function fetchList(listId: string) {
   return apiRequest<ShoppingListDetail>(`/api/lists/${listId}`)
 }
 
-export function addManualItem(actorName: string, listId: string, title: string, note: string) {
+export function addManualItem(actorName: string, listId: string, title: string, note: string, quantity = 1) {
   return apiRequest<ShoppingListItem>(`/api/lists/${listId}/items/manual`, {
     method: 'POST',
     actorName,
-    body: { title, note },
+    body: { title, note, quantity },
   })
 }
 
-export function addExternalItem(actorName: string, listId: string, result: RetailerSearchResult) {
+export function addExternalItem(actorName: string, listId: string, result: RetailerSearchResult, quantity = 1) {
   return apiRequest<ShoppingListItem>(`/api/lists/${listId}/items/external`, {
     method: 'POST',
     actorName,
@@ -52,6 +52,7 @@ export function addExternalItem(actorName: string, listId: string, result: Retai
       priceAmount: result.priceAmount,
       currency: result.currency,
       rawPayloadJson: result.rawPayloadJson,
+      quantity,
     },
   })
 }

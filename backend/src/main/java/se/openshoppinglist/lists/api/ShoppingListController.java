@@ -3,6 +3,7 @@ package se.openshoppinglist.lists.api;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Positive;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -91,6 +92,7 @@ public class ShoppingListController {
                 listId,
                 request.title(),
                 request.note(),
+                request.quantity() == null ? 1 : request.quantity(),
                 actorContextResolver.resolve(httpServletRequest)
         ));
     }
@@ -115,6 +117,7 @@ public class ShoppingListController {
         return shoppingListQueryService.toItemView(shoppingListCommandService.addExternalItem(
                 listId,
                 snapshot,
+                request.quantity() == null ? 1 : request.quantity(),
                 actorContextResolver.resolve(httpServletRequest)
         ));
     }
@@ -177,7 +180,7 @@ public class ShoppingListController {
     public record RenameListRequest(@NotBlank String name) {
     }
 
-    public record AddManualItemRequest(@NotBlank String title, String note) {
+    public record AddManualItemRequest(@NotBlank String title, String note, @Positive Integer quantity) {
     }
 
     public record AddExternalItemRequest(
@@ -189,7 +192,8 @@ public class ShoppingListController {
             String category,
             java.math.BigDecimal priceAmount,
             String currency,
-            String rawPayloadJson
+            String rawPayloadJson,
+            @Positive Integer quantity
     ) {
     }
 }
