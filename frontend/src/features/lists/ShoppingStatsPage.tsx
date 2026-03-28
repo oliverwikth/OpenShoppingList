@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { fetchStats } from './api'
 import { HomeViewSwitch } from './HomeViewSwitch'
@@ -56,7 +56,8 @@ export function ShoppingStatsPage() {
   const [stats, setStats] = useState<ShoppingStats | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [selectedPointIndex, setSelectedPointIndex] = useState<number | null>(null)
+  const [heldPointIndex, setHeldPointIndex] = useState<number | null>(null)
+  const holdTimerRef = useRef<number | null>(null)
   const range = resolveStatsRange(searchParams.get('range'))
 
   useEffect(() => {
@@ -68,12 +69,15 @@ export function ShoppingStatsPage() {
   const listDelta = calculateDelta(stats?.activeListCount ?? 0, stats?.previousActiveListCount ?? null)
   const averageDelta = calculateDelta(stats?.averagePricedItemAmount ?? 0, stats?.previousAveragePricedItemAmount ?? null)
   const chart = useMemo(() => buildStatsChart(stats?.spendSeries ?? [], range, stats?.currency ?? null), [stats?.spendSeries, range, stats?.currency])
-  const selectedPoint = useMemo(() => resolveSelectedPoint(chart, selectedPointIndex), [chart, selectedPointIndex])
+  const selectedPoint = useMemo(() => resolveSelectedPoint(chart, heldPointIndex), [chart, heldPointIndex])
   const topQuantity = stats?.topItems[0]?.quantity ?? 0
 
   useEffect(() => {
-    setSelectedPointIndex(chart?.plottedPoints.at(-1)?.index ?? null)
+    setHeldPointIndex(null)
+    clearHoldTimer()
   }, [chart?.linePath])
+
+  useEffect(() => () => clearHoldTimer(), [])
 
   async function loadStats(nextRange: StatsRange) {
     setIsLoading(true)
@@ -95,6 +99,26 @@ export function ShoppingStatsPage() {
       nextSearchParams.set('range', nextRange)
     }
     setSearchParams(nextSearchParams, { replace: true })
+  }
+
+  function clearHoldTimer() {
+    if (holdTimerRef.current !== null) {
+      window.clearTimeout(holdTimerRef.current)
+      holdTimerRef.current = null
+    }
+  }
+
+  function startPointHold(index: number) {
+    clearHoldTimer()
+    holdTimerRef.current = window.setTimeout(() => {
+      setHeldPointIndex(index)
+      holdTimerRef.current = null
+    }, 220)
+  }
+
+  function stopPointHold() {
+    clearHoldTimer()
+    setHeldPointIndex(null)
   }
 
   const summaryValue = spendDelta.percentage === null
@@ -164,22 +188,24 @@ export function ShoppingStatsPage() {
                       <span className="stats-market-legend__dot" />
                       Listkostnad
                     </span>
-                    <span className="stats-market-legend__hint">Tryck på punkterna för datum och värden</span>
+                    <span className="stats-market-legend__hint">Håll ned en punkt för datum och värden</span>
                   </div>
                 </div>
 
                 <section className="stats-hero-chart" aria-label="Kostnad per period">
-                  {chart && selectedPoint ? (
+                  {chart ? (
                     <div className="stats-chart-panel">
                       <div className="stats-chart-stage">
-                        <div
-                          className={`stats-chart-tooltip ${selectedPoint.xPercent > 70 ? 'is-right' : 'is-left'}`}
-                          style={{ left: `${selectedPoint.xPercent}%`, top: `${selectedPoint.yPercent}%` }}
-                        >
-                          <strong>{formatTooltipDate(selectedPoint.point.bucketStart, range)}</strong>
-                          <span>{formatMoney(selectedPoint.point.amount, stats.currency)}</span>
-                          <span>{selectedPoint.point.quantity} varor</span>
-                        </div>
+                        {selectedPoint ? (
+                          <div
+                            className="stats-chart-tooltip"
+                            style={buildTooltipStyle(selectedPoint)}
+                          >
+                            <strong>{formatTooltipDate(selectedPoint.point.bucketStart, range)}</strong>
+                            <span>{formatMoney(selectedPoint.point.amount, stats.currency)}</span>
+                            <span>{selectedPoint.point.quantity} varor</span>
+                          </div>
+                        ) : null}
 
                         <svg className="stats-chart" viewBox={`0 0 ${chart.width} ${chart.height}`} preserveAspectRatio="none" role="img">
                           <defs>
@@ -218,23 +244,29 @@ export function ShoppingStatsPage() {
                           <path className="stats-chart__area" d={chart.areaPath} fill="url(#stats-area-fill)" />
                           <path className="stats-chart__line" d={chart.linePath} />
 
-                          <line
-                            className="stats-chart__guide"
-                            x1={selectedPoint.x}
-                            x2={selectedPoint.x}
-                            y1={16}
-                            y2={chart.baselineY}
-                          />
+                          {selectedPoint ? (
+                            <line
+                              className="stats-chart__guide"
+                              x1={selectedPoint.x}
+                              x2={selectedPoint.x}
+                              y1={16}
+                              y2={chart.baselineY}
+                            />
+                          ) : null}
                         </svg>
 
                         <div className="stats-chart__markers">
                           {chart.plottedPoints.map((point) => (
                             <button
                               aria-label={`Visa ${formatTooltipDate(point.point.bucketStart, range)}: ${formatMoney(point.point.amount, stats.currency)}`}
-                              className={`stats-chart__hotspot ${selectedPoint.index === point.index ? 'is-active' : ''}`}
+                              className={`stats-chart__hotspot ${selectedPoint?.index === point.index ? 'is-active' : ''}`}
                               key={point.index}
-                              onClick={() => setSelectedPointIndex(point.index)}
-                              onPointerDown={() => setSelectedPointIndex(point.index)}
+                              onBlur={stopPointHold}
+                              onFocus={() => setHeldPointIndex(point.index)}
+                              onPointerCancel={stopPointHold}
+                              onPointerDown={() => startPointHold(point.index)}
+                              onPointerLeave={stopPointHold}
+                              onPointerUp={stopPointHold}
                               style={{ left: `${point.xPercent}%`, top: `${point.yPercent}%` }}
                               type="button"
                             >
@@ -559,11 +591,27 @@ function buildStatsChart(points: ShoppingStats['spendSeries'], range: StatsRange
 }
 
 function resolveSelectedPoint(chart: StatsChartModel | null, selectedPointIndex: number | null) {
-  if (!chart) {
+  if (!chart || selectedPointIndex === null) {
     return null
   }
 
-  return chart.plottedPoints.find((point) => point.index === selectedPointIndex) ?? chart.plottedPoints.at(-1) ?? null
+  return chart.plottedPoints.find((point) => point.index === selectedPointIndex) ?? null
+}
+
+function buildTooltipStyle(point: ChartPointModel) {
+  const tooltipWidth = 176
+  const tooltipHeight = 84
+  const edgePadding = 12
+  const tooltipHalfWidth = tooltipWidth / 2
+  const leftInset = edgePadding
+  const rightInset = edgePadding + tooltipWidth
+  const topInset = edgePadding
+  const bottomInset = edgePadding + tooltipHeight
+
+  return {
+    left: `clamp(${leftInset}px, calc(${point.xPercent}% - ${tooltipHalfWidth}px), calc(100% - ${rightInset}px))`,
+    top: `clamp(${topInset}px, calc(${point.yPercent}% - ${tooltipHeight + 16}px), calc(100% - ${bottomInset}px))`,
+  }
 }
 
 function buildTickIndices(length: number, desiredTicks: number) {

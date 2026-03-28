@@ -440,6 +440,7 @@
   border: 0;
   background: transparent;
   transform: translate(-50%, -50%);
+  touch-action: none;
 }
 
 .stats-chart__hotspot-core {
@@ -454,7 +455,6 @@
   transition: width 120ms ease, height 120ms ease, background-color 120ms ease, box-shadow 120ms ease;
 }
 
-.stats-chart__hotspot:hover .stats-chart__hotspot-core,
 .stats-chart__hotspot.is-active .stats-chart__hotspot-core {
   width: 14px;
   height: 14px;
@@ -467,18 +467,15 @@
   z-index: 2;
   display: grid;
   gap: 2px;
-  min-width: 150px;
+  width: 176px;
+  max-width: calc(100% - 24px);
   padding: 10px 12px;
   border-radius: 16px;
   border: 1px solid rgba(171, 210, 250, 0.38);
   background: rgba(255, 255, 255, 0.98);
   color: var(--text);
   box-shadow: 0 12px 30px rgba(78, 135, 219, 0.16);
-  transform: translate(14px, calc(-100% - 12px));
-}
-
-.stats-chart-tooltip.is-right {
-  transform: translate(calc(-100% - 14px), calc(-100% - 12px));
+  pointer-events: none;
 }
 
 .stats-chart-tooltip strong {
