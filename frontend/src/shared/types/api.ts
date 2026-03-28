@@ -64,6 +64,39 @@ export interface ItemQuantityChange {
   item: ShoppingListItem | null
 }
 
+export interface ShoppingStatsPoint {
+  label: string
+  bucketStart: string
+  amount: number
+  cumulativeAmount: number
+  quantity: number
+}
+
+export interface TopPurchasedItem {
+  title: string
+  quantity: number
+  spentAmount: number
+}
+
+export interface ShoppingStats {
+  range: 'month' | 'quarter' | 'year' | 'all'
+  rangeStart: string
+  rangeEnd: string
+  currentPeriodLabel: string
+  previousPeriodLabel: string | null
+  spentAmount: number
+  previousSpentAmount: number | null
+  currency: string | null
+  purchasedQuantity: number
+  previousPurchasedQuantity: number | null
+  activeListCount: number
+  previousActiveListCount: number | null
+  averagePricedItemAmount: number
+  previousAveragePricedItemAmount: number | null
+  spendSeries: ShoppingStatsPoint[]
+  topItems: TopPurchasedItem[]
+}
+
 export interface RetailerSearchResult {
   provider: string
   articleId: string

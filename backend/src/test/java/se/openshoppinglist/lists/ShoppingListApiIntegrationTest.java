@@ -237,6 +237,63 @@ class ShoppingListApiIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void returnsAggregatedStatsForTheSelectedRange() throws Exception {
+        MvcResult createListResult = mockMvc.perform(post("/api/lists")
+                        .header(ActorDisplayName.HEADER_NAME, "anna")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Veckohandling"}
+                                """))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        String listId = readId(createListResult);
+
+        mockMvc.perform(post("/api/lists/{listId}/items/external", listId)
+                        .header(ActorDisplayName.HEADER_NAME, "anna")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "provider":"willys",
+                                  "articleId":"taco-1",
+                                  "title":"Tacobröd",
+                                  "subtitle":"8-pack",
+                                  "imageUrl":null,
+                                  "category":"Taco",
+                                  "priceAmount":39.90,
+                                  "currency":"SEK",
+                                  "rawPayloadJson":"{}",
+                                  "quantity":2
+                                }
+                                """))
+                .andExpect(status().isOk());
+
+        MvcResult listDetails = mockMvc.perform(get("/api/lists/{listId}", listId))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        String itemId = objectMapper.readTree(listDetails.getResponse().getContentAsString())
+                .path("items")
+                .path(0)
+                .path("id")
+                .asText();
+
+        mockMvc.perform(post("/api/lists/{listId}/items/{itemId}/check", listId, itemId)
+                        .header(ActorDisplayName.HEADER_NAME, "anna"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/lists/stats")
+                        .param("range", "month"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.range").value("month"))
+                .andExpect(jsonPath("$.spentAmount").value(79.8))
+                .andExpect(jsonPath("$.currency").value("SEK"))
+                .andExpect(jsonPath("$.purchasedQuantity").value(2))
+                .andExpect(jsonPath("$.topItems[0].title").value("Tacobröd"))
+                .andExpect(jsonPath("$.topItems[0].quantity").value(2));
+    }
+
+    @Test
     void renamesExistingList() throws Exception {
         MvcResult createListResult = mockMvc.perform(post("/api/lists")
                         .header(ActorDisplayName.HEADER_NAME, "anna")

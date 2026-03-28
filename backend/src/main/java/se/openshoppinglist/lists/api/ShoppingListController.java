@@ -14,10 +14,12 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import se.openshoppinglist.actor.ActorContextResolver;
 import se.openshoppinglist.lists.application.ShoppingListCommandService;
 import se.openshoppinglist.lists.application.ShoppingListQueryService;
+import se.openshoppinglist.lists.application.ShoppingStatsQueryService;
 import se.openshoppinglist.lists.application.ShoppingListViews;
 import se.openshoppinglist.lists.domain.ExternalArticleSnapshot;
 
@@ -28,15 +30,18 @@ public class ShoppingListController {
 
     private final ShoppingListCommandService shoppingListCommandService;
     private final ShoppingListQueryService shoppingListQueryService;
+    private final ShoppingStatsQueryService shoppingStatsQueryService;
     private final ActorContextResolver actorContextResolver;
 
     public ShoppingListController(
             ShoppingListCommandService shoppingListCommandService,
             ShoppingListQueryService shoppingListQueryService,
+            ShoppingStatsQueryService shoppingStatsQueryService,
             ActorContextResolver actorContextResolver
     ) {
         this.shoppingListCommandService = shoppingListCommandService;
         this.shoppingListQueryService = shoppingListQueryService;
+        this.shoppingStatsQueryService = shoppingStatsQueryService;
         this.actorContextResolver = actorContextResolver;
     }
 
@@ -59,6 +64,11 @@ public class ShoppingListController {
     @GetMapping("/{listId}")
     ShoppingListViews.ShoppingListDetailView getList(@PathVariable UUID listId) {
         return shoppingListQueryService.getList(listId);
+    }
+
+    @GetMapping("/stats")
+    ShoppingListViews.ShoppingStatsView getStats(@RequestParam(defaultValue = "month") String range) {
+        return shoppingStatsQueryService.getStats(range);
     }
 
     @PatchMapping("/{listId}")

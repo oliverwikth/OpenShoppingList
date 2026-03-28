@@ -5,6 +5,7 @@ import type {
   ShoppingListDetail,
   ShoppingListItem,
   ShoppingListOverview,
+  ShoppingStats,
 } from '../../shared/types/api'
 
 export function fetchLists() {
@@ -29,6 +30,10 @@ export function renameList(actorName: string, listId: string, name: string) {
 
 export function fetchList(listId: string) {
   return apiRequest<ShoppingListDetail>(`/api/lists/${listId}`)
+}
+
+export function fetchStats(range: 'month' | 'quarter' | 'year' | 'all') {
+  return apiRequest<ShoppingStats>(`/api/lists/stats?range=${range}`)
 }
 
 export function addManualItem(actorName: string, listId: string, title: string, note: string, quantity = 1) {

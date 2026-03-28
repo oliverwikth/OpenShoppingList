@@ -69,7 +69,7 @@ describe('ListsOverviewPage', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText('Alla listor')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Alla listor' })).toBeInTheDocument()
     expect(await screen.findByText('Veckohandling')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Skapa ny lista' }))
@@ -91,5 +91,90 @@ describe('ListsOverviewPage', () => {
         }),
       )
     })
+  })
+
+  it('loads the statistics page and lets the user switch ranges', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          range: 'month',
+          rangeStart: '2026-03-01T00:00:00Z',
+          rangeEnd: '2026-03-28T12:00:00Z',
+          currentPeriodLabel: 'mars 2026',
+          previousPeriodLabel: 'februari 2026',
+          spentAmount: 1499,
+          previousSpentAmount: 980,
+          currency: 'SEK',
+          purchasedQuantity: 24,
+          previousPurchasedQuantity: 18,
+          activeListCount: 3,
+          previousActiveListCount: 2,
+          averagePricedItemAmount: 62.46,
+          previousAveragePricedItemAmount: 54.44,
+          spendSeries: [
+            { label: '1', bucketStart: '2026-03-01T00:00:00Z', amount: 499, cumulativeAmount: 499, quantity: 8 },
+            { label: '15', bucketStart: '2026-03-15T00:00:00Z', amount: 500, cumulativeAmount: 999, quantity: 7 },
+            { label: '28', bucketStart: '2026-03-28T00:00:00Z', amount: 500, cumulativeAmount: 1499, quantity: 9 },
+          ],
+          topItems: [
+            { title: 'Tortillabröd', quantity: 5, spentAmount: 210 },
+            { title: 'Kaffe', quantity: 4, spentAmount: 340 },
+          ],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          range: 'year',
+          rangeStart: '2026-01-01T00:00:00Z',
+          rangeEnd: '2026-03-28T12:00:00Z',
+          currentPeriodLabel: '2026',
+          previousPeriodLabel: '2025',
+          spentAmount: 3999,
+          previousSpentAmount: 2800,
+          currency: 'SEK',
+          purchasedQuantity: 81,
+          previousPurchasedQuantity: 60,
+          activeListCount: 8,
+          previousActiveListCount: 6,
+          averagePricedItemAmount: 49.37,
+          previousAveragePricedItemAmount: 46.67,
+          spendSeries: [
+            { label: 'jan.', bucketStart: '2026-01-01T00:00:00Z', amount: 1200, cumulativeAmount: 1200, quantity: 22 },
+            { label: 'feb.', bucketStart: '2026-02-01T00:00:00Z', amount: 1300, cumulativeAmount: 2500, quantity: 27 },
+            { label: 'mars', bucketStart: '2026-03-01T00:00:00Z', amount: 1499, cumulativeAmount: 3999, quantity: 32 },
+          ],
+          topItems: [
+            { title: 'Kaffe', quantity: 12, spentAmount: 999 },
+          ],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
+
+    render(
+      <MemoryRouter initialEntries={['/anna/statistik']}>
+        <AppShell />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('Din shopping i siffror')).toBeInTheDocument()
+    expect(screen.getByText('Tortillabröd')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Alla listor' })).toHaveAttribute('href', '/anna')
+
+    fireEvent.click(screen.getByRole('tab', { name: 'År' }))
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith('/api/lists/stats?range=year', expect.any(Object))
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText(/3.*999.*kr/)).toBeInTheDocument()
+    })
+    expect(screen.getByText('Kaffe')).toBeInTheDocument()
   })
 })

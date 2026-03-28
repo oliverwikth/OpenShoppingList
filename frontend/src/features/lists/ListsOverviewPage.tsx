@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties, FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { createList, fetchLists } from './api'
+import { HomeViewSwitch } from './HomeViewSwitch'
 import { useActorName } from '../actor/useActorName'
 import type { ShoppingListOverview } from '../../shared/types/api'
 import '../../components/ui/ui.css'
@@ -124,6 +125,8 @@ export function ListsOverviewPage() {
       </header>
 
       <section className="screen-body overview-body overview-body--minimal">
+        <HomeViewSwitch actorName={actorName} current="lists" />
+
         {error ? <div className="info-banner">{error}</div> : null}
 
         <section className="screen-card screen-card--minimal">

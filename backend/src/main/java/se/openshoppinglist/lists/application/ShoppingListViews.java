@@ -61,6 +61,42 @@ public final class ShoppingListViews {
     ) {
     }
 
+    public record ShoppingStatsView(
+            String range,
+            Instant rangeStart,
+            Instant rangeEnd,
+            String currentPeriodLabel,
+            String previousPeriodLabel,
+            BigDecimal spentAmount,
+            BigDecimal previousSpentAmount,
+            String currency,
+            Integer purchasedQuantity,
+            Integer previousPurchasedQuantity,
+            Integer activeListCount,
+            Integer previousActiveListCount,
+            BigDecimal averagePricedItemAmount,
+            BigDecimal previousAveragePricedItemAmount,
+            List<ShoppingStatsPointView> spendSeries,
+            List<TopPurchasedItemView> topItems
+    ) {
+    }
+
+    public record ShoppingStatsPointView(
+            String label,
+            Instant bucketStart,
+            BigDecimal amount,
+            BigDecimal cumulativeAmount,
+            int quantity
+    ) {
+    }
+
+    public record TopPurchasedItemView(
+            String title,
+            Integer quantity,
+            BigDecimal spentAmount
+    ) {
+    }
+
     public record ExternalSnapshotView(
             String provider,
             String articleId,
