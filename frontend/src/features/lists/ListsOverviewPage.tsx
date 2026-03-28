@@ -4,8 +4,17 @@ import { Link, useNavigate } from 'react-router-dom'
 import { createList, fetchLists } from './api'
 import { HomeViewSwitch } from './HomeViewSwitch'
 import { useActorName } from '../actor/useActorName'
-import type { ShoppingListOverview } from '../../shared/types/api'
+import type { ShoppingListOverviewPage } from '../../shared/types/api'
 import '../../components/ui/ui.css'
+
+type ListPageSize = 5 | 10 | 20 | 'all'
+
+const PAGE_SIZE_OPTIONS: Array<{ value: ListPageSize; label: string }> = [
+  { value: 5, label: '5' },
+  { value: 10, label: '10' },
+  { value: 20, label: '20' },
+  { value: 'all', label: 'Alla' },
+]
 
 function getDefaultListTitle() {
   return new Intl.DateTimeFormat('sv-SE', {
@@ -19,18 +28,22 @@ function getDefaultListTitle() {
 export function ListsOverviewPage() {
   const actorName = useActorName()
   const navigate = useNavigate()
-  const [lists, setLists] = useState<ShoppingListOverview[]>([])
+  const [listPage, setListPage] = useState<ShoppingListOverviewPage | null>(null)
   const [newListName, setNewListName] = useState(getDefaultListTitle)
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [keyboardInset, setKeyboardInset] = useState(0)
   const [error, setError] = useState<string | null>(null)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState<ListPageSize>(5)
   const newListInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
-    void loadLists()
-  }, [])
+    setPage(1)
+    void loadLists(1, pageSize, 'replace')
+  }, [pageSize])
 
   useEffect(() => {
     if (!isCreateOpen) {
@@ -71,15 +84,36 @@ export function ListsOverviewPage() {
     return () => window.clearTimeout(timeoutId)
   }, [isCreateOpen])
 
-  async function loadLists() {
-    setIsLoading(true)
-    setError(null)
+  async function loadLists(nextPage: number, nextPageSize: ListPageSize, mode: 'replace' | 'append') {
+    if (mode === 'append') {
+      setIsLoadingMore(true)
+    } else {
+      setIsLoading(true)
+    }
+    if (mode === 'replace') {
+      setError(null)
+    }
     try {
-      setLists(await fetchLists())
+      const response = await fetchLists(nextPage, nextPageSize)
+      setListPage((currentPage) => {
+        if (mode === 'append' && currentPage) {
+          return {
+            ...response,
+            items: [...currentPage.items, ...response.items],
+          }
+        }
+
+        return response
+      })
+      setPage(response.page)
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Kunde inte hämta listor.')
     } finally {
-      setIsLoading(false)
+      if (mode === 'append') {
+        setIsLoadingMore(false)
+      } else {
+        setIsLoading(false)
+      }
     }
   }
 
@@ -112,6 +146,17 @@ export function ListsOverviewPage() {
     setNewListName(getDefaultListTitle())
   }
 
+  function changePageSize(nextPageSize: ListPageSize) {
+    setListPage(null)
+    setPageSize(nextPageSize)
+    setPage(1)
+  }
+
+  const lists = listPage?.items ?? []
+  const totalItems = listPage?.totalItems ?? 0
+  const visibleCount = lists.length
+  const progressWidth = totalItems === 0 ? 0 : Math.max((visibleCount / totalItems) * 100, visibleCount > 0 ? 4 : 0)
+
   return (
     <main className="app-frame">
       <header className="app-header app-header-home">
@@ -132,9 +177,32 @@ export function ListsOverviewPage() {
         <section className="screen-card screen-card--minimal">
           <div className="section-heading">
             <h1>Alla listor</h1>
-            <button className="header-action header-action--light" onClick={() => void loadLists()} type="button">
+            <button className="header-action header-action--light" onClick={() => void loadLists(1, pageSize, 'replace')} type="button">
               Uppdatera
             </button>
+          </div>
+
+          <div className="lists-toolbar">
+            <label className="lists-page-size">
+              <span>Visa</span>
+              <span className="lists-page-size__field">
+                <select
+                  aria-label="Listor per sida"
+                  className="lists-page-size__select"
+                  onChange={(event) => changePageSize(parsePageSize(event.target.value))}
+                  value={String(pageSize)}
+                >
+                  {PAGE_SIZE_OPTIONS.map((option) => (
+                    <option key={option.label} value={String(option.value)}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <span aria-hidden="true" className="lists-page-size__chevron">
+                  ⌄
+                </span>
+              </span>
+            </label>
           </div>
 
           {isLoading ? <p className="empty-state">Hämtar listor...</p> : null}
@@ -157,7 +225,29 @@ export function ListsOverviewPage() {
               </Link>
             ))}
           </div>
+
         </section>
+
+          {!isLoading && totalItems > 0 ? (
+            <section className="lists-load-more">
+              <strong className="lists-load-more__summary">Visar {visibleCount} av {totalItems}</strong>
+              <div aria-hidden="true" className="lists-load-more__track">
+                <span className="lists-load-more__bar" style={{ width: `${progressWidth}%` }} />
+              </div>
+              {listPage?.hasNextPage ? (
+                <button
+                  className="primary-pill lists-load-more__button"
+                  disabled={isLoadingMore}
+                  onClick={() => {
+                    void loadLists(page + 1, pageSize, 'append')
+                  }}
+                  type="button"
+                >
+                  {isLoadingMore ? 'Hämtar...' : 'Visa fler'}
+                </button>
+              ) : null}
+            </section>
+          ) : null}
       </section>
 
       {isCreateOpen ? (
@@ -190,4 +280,13 @@ export function ListsOverviewPage() {
       ) : null}
     </main>
   )
+}
+
+function parsePageSize(rawValue: string): ListPageSize {
+  if (rawValue === 'all') {
+    return 'all'
+  }
+
+  const parsed = Number.parseInt(rawValue, 10)
+  return parsed === 10 || parsed === 20 ? parsed : 5
 }

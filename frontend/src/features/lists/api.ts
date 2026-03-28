@@ -5,11 +5,16 @@ import type {
   ShoppingListDetail,
   ShoppingListItem,
   ShoppingListOverview,
+  ShoppingListOverviewPage,
   ShoppingStats,
 } from '../../shared/types/api'
 
-export function fetchLists() {
-  return apiRequest<ShoppingListOverview[]>('/api/lists')
+export function fetchLists(page: number, pageSize: number | 'all') {
+  const params = new URLSearchParams({
+    page: String(page),
+    pageSize: String(pageSize),
+  })
+  return apiRequest<ShoppingListOverviewPage>(`/api/lists?${params.toString()}`)
 }
 
 export function createList(actorName: string, name: string) {
@@ -32,7 +37,7 @@ export function fetchList(listId: string) {
   return apiRequest<ShoppingListDetail>(`/api/lists/${listId}`)
 }
 
-export function fetchStats(range: 'month' | 'quarter' | 'year' | 'all') {
+export function fetchStats(range: 'month' | 'quarter' | 'ytd' | 'year' | 'all') {
   return apiRequest<ShoppingStats>(`/api/lists/stats?range=${range}`)
 }
 

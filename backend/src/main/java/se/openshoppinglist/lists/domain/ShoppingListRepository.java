@@ -10,5 +10,9 @@ public interface ShoppingListRepository {
 
     List<ShoppingList> findAll();
 
+    List<ShoppingList> findPage(int pageNumber, int pageSize);
+
+    long count();
+
     Optional<ShoppingList> findById(UUID listId);
 }

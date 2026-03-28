@@ -56,8 +56,11 @@ public class ShoppingListController {
     }
 
     @GetMapping
-    List<ShoppingListViews.ShoppingListOverviewView> getLists() {
-        return shoppingListQueryService.findAllLists();
+    ShoppingListViews.ShoppingListOverviewPageView getLists(
+            @RequestParam(defaultValue = "1") Integer page,
+            @RequestParam(defaultValue = "5") String pageSize
+    ) {
+        return shoppingListQueryService.findListsPage(page, resolvePageSize(pageSize));
     }
 
     @PostMapping
@@ -140,6 +143,22 @@ public class ShoppingListController {
     private <T> java.util.stream.Stream<T> streamOf(java.util.Iterator<T> iterator) {
         Iterable<T> iterable = () -> iterator;
         return java.util.stream.StreamSupport.stream(iterable.spliterator(), false);
+    }
+
+    private Integer resolvePageSize(String rawPageSize) {
+        if (rawPageSize == null || rawPageSize.isBlank()) {
+            return 5;
+        }
+
+        if ("all".equalsIgnoreCase(rawPageSize.trim())) {
+            return null;
+        }
+
+        try {
+            return Integer.parseInt(rawPageSize.trim());
+        } catch (NumberFormatException exception) {
+            throw new IllegalArgumentException("List page size must be a positive integer or 'all'.");
+        }
     }
 
     @PatchMapping("/{listId}")

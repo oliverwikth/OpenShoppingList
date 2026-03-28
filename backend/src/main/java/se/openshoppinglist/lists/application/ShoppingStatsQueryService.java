@@ -242,8 +242,8 @@ public class ShoppingStatsQueryService {
             @Override
             Window currentWindow(Instant now, ZoneId zoneId, List<CheckedItemSnapshot> ignoredItems) {
                 LocalDate today = LocalDate.ofInstant(now, zoneId);
-                LocalDate monthStart = today.withDayOfMonth(1);
-                return new Window(monthStart.atStartOfDay(zoneId).toInstant(), now, MONTH_PERIOD_LABEL_FORMATTER.format(monthStart));
+                LocalDate monthStart = today.minusMonths(1);
+                return new Window(monthStart.atStartOfDay(zoneId).toInstant(), now, "senaste månaden");
             }
 
             @Override
@@ -253,7 +253,7 @@ public class ShoppingStatsQueryService {
                 return new Window(
                         previousStart.atStartOfDay(zoneId).toInstant(),
                         currentStart.atStartOfDay(zoneId).toInstant(),
-                        MONTH_PERIOD_LABEL_FORMATTER.format(previousStart)
+                        "föregående månaden"
                 );
             }
 
@@ -275,21 +275,18 @@ public class ShoppingStatsQueryService {
             @Override
             Window currentWindow(Instant now, ZoneId zoneId, List<CheckedItemSnapshot> ignoredItems) {
                 LocalDate today = LocalDate.ofInstant(now, zoneId);
-                int quarterStartMonth = ((today.getMonthValue() - 1) / 3) * 3 + 1;
-                LocalDate quarterStart = LocalDate.of(today.getYear(), quarterStartMonth, 1);
-                String label = "Q" + (((quarterStartMonth - 1) / 3) + 1) + " " + today.getYear();
-                return new Window(quarterStart.atStartOfDay(zoneId).toInstant(), now, label);
+                LocalDate quarterStart = today.minusMonths(3);
+                return new Window(quarterStart.atStartOfDay(zoneId).toInstant(), now, "senaste 3 månaderna");
             }
 
             @Override
             Window previousWindow(Window currentWindow, ZoneId zoneId) {
                 LocalDate currentStart = LocalDate.ofInstant(currentWindow.start(), zoneId);
                 LocalDate previousStart = currentStart.minusMonths(3);
-                String label = "Q" + ((((previousStart.getMonthValue() - 1) / 3)) + 1) + " " + previousStart.getYear();
                 return new Window(
                         previousStart.atStartOfDay(zoneId).toInstant(),
                         currentStart.atStartOfDay(zoneId).toInstant(),
-                        label
+                        "föregående 3 månader"
                 );
             }
 
@@ -311,12 +308,39 @@ public class ShoppingStatsQueryService {
                 return buckets;
             }
         },
-        YEAR("year") {
+        YTD("ytd") {
             @Override
             Window currentWindow(Instant now, ZoneId zoneId, List<CheckedItemSnapshot> ignoredItems) {
                 LocalDate today = LocalDate.ofInstant(now, zoneId);
                 LocalDate yearStart = LocalDate.of(today.getYear(), 1, 1);
-                return new Window(yearStart.atStartOfDay(zoneId).toInstant(), now, String.valueOf(today.getYear()));
+                return new Window(yearStart.atStartOfDay(zoneId).toInstant(), now, "i år");
+            }
+
+            @Override
+            Window previousWindow(Window currentWindow, ZoneId zoneId) {
+                LocalDate currentStart = LocalDate.ofInstant(currentWindow.start(), zoneId);
+                LocalDate previousStart = currentStart.minusYears(1);
+                Instant previousEnd = previousStart.atStartOfDay(zoneId)
+                        .toInstant()
+                        .plusMillis(java.time.Duration.between(currentWindow.start(), currentWindow.end()).toMillis());
+                return new Window(
+                        previousStart.atStartOfDay(zoneId).toInstant(),
+                        previousEnd,
+                        "samma period " + previousStart.getYear()
+                );
+            }
+
+            @Override
+            List<Bucket> buckets(Window window, ZoneId zoneId) {
+                return monthlyBuckets(window, zoneId);
+            }
+        },
+        YEAR("year") {
+            @Override
+            Window currentWindow(Instant now, ZoneId zoneId, List<CheckedItemSnapshot> ignoredItems) {
+                LocalDate today = LocalDate.ofInstant(now, zoneId);
+                LocalDate yearStart = today.minusYears(1);
+                return new Window(yearStart.atStartOfDay(zoneId).toInstant(), now, "senaste året");
             }
 
             @Override
@@ -326,7 +350,7 @@ public class ShoppingStatsQueryService {
                 return new Window(
                         previousStart.atStartOfDay(zoneId).toInstant(),
                         currentStart.atStartOfDay(zoneId).toInstant(),
-                        String.valueOf(previousStart.getYear())
+                        "året innan"
                 );
             }
 

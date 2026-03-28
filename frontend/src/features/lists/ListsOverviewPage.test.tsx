@@ -18,17 +18,25 @@ describe('ListsOverviewPage', () => {
 
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
       new Response(
-        JSON.stringify([
-          {
-            id: 'list-1',
-            name: 'Veckohandling',
-            status: 'ACTIVE',
-            itemCount: 2,
-            checkedItemCount: 1,
-            updatedAt: '2026-03-26T18:00:00Z',
-            lastModifiedByDisplayName: 'anna',
-          },
-        ]),
+        JSON.stringify({
+          items: [
+            {
+              id: 'list-1',
+              name: 'Veckohandling',
+              status: 'ACTIVE',
+              itemCount: 2,
+              checkedItemCount: 1,
+              updatedAt: '2026-03-26T18:00:00Z',
+              lastModifiedByDisplayName: 'anna',
+            },
+          ],
+          page: 1,
+          pageSize: 5,
+          totalItems: 1,
+          totalPages: 1,
+          hasPreviousPage: false,
+          hasNextPage: false,
+        }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
       ),
     )
@@ -71,6 +79,7 @@ describe('ListsOverviewPage', () => {
 
     expect(await screen.findByRole('heading', { name: 'Alla listor' })).toBeInTheDocument()
     expect(await screen.findByText('Veckohandling')).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledWith('/api/lists?page=1&pageSize=5', expect.any(Object))
 
     fireEvent.click(screen.getByRole('button', { name: 'Skapa ny lista' }))
 
@@ -91,6 +100,156 @@ describe('ListsOverviewPage', () => {
         }),
       )
     })
+  })
+
+  it('loads more lists into the overview and lets the user switch page size up to all', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          items: [
+            {
+              id: 'list-6',
+              name: 'Lista 6',
+              status: 'ACTIVE',
+              itemCount: 3,
+              checkedItemCount: 1,
+              updatedAt: '2026-03-26T18:10:00Z',
+              lastModifiedByDisplayName: 'anna',
+            },
+          ],
+          page: 1,
+          pageSize: 5,
+          totalItems: 6,
+          totalPages: 2,
+          hasPreviousPage: false,
+          hasNextPage: true,
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          items: [
+            {
+              id: 'list-1',
+              name: 'Lista 1',
+              status: 'ACTIVE',
+              itemCount: 2,
+              checkedItemCount: 0,
+              updatedAt: '2026-03-20T18:10:00Z',
+              lastModifiedByDisplayName: 'anna',
+            },
+          ],
+          page: 2,
+          pageSize: 5,
+          totalItems: 6,
+          totalPages: 2,
+          hasPreviousPage: true,
+          hasNextPage: false,
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          items: [
+            {
+              id: 'list-6',
+              name: 'Lista 6',
+              status: 'ACTIVE',
+              itemCount: 3,
+              checkedItemCount: 1,
+              updatedAt: '2026-03-26T18:10:00Z',
+              lastModifiedByDisplayName: 'anna',
+            },
+            {
+              id: 'list-5',
+              name: 'Lista 5',
+              status: 'ACTIVE',
+              itemCount: 4,
+              checkedItemCount: 2,
+              updatedAt: '2026-03-25T18:10:00Z',
+              lastModifiedByDisplayName: 'anna',
+            },
+            {
+              id: 'list-4',
+              name: 'Lista 4',
+              status: 'ACTIVE',
+              itemCount: 5,
+              checkedItemCount: 3,
+              updatedAt: '2026-03-24T18:10:00Z',
+              lastModifiedByDisplayName: 'anna',
+            },
+            {
+              id: 'list-3',
+              name: 'Lista 3',
+              status: 'ACTIVE',
+              itemCount: 6,
+              checkedItemCount: 4,
+              updatedAt: '2026-03-23T18:10:00Z',
+              lastModifiedByDisplayName: 'anna',
+            },
+            {
+              id: 'list-2',
+              name: 'Lista 2',
+              status: 'ACTIVE',
+              itemCount: 7,
+              checkedItemCount: 5,
+              updatedAt: '2026-03-22T18:10:00Z',
+              lastModifiedByDisplayName: 'anna',
+            },
+            {
+              id: 'list-1',
+              name: 'Lista 1',
+              status: 'ACTIVE',
+              itemCount: 2,
+              checkedItemCount: 0,
+              updatedAt: '2026-03-20T18:10:00Z',
+              lastModifiedByDisplayName: 'anna',
+            },
+          ],
+          page: 1,
+          pageSize: 6,
+          totalItems: 6,
+          totalPages: 1,
+          hasPreviousPage: false,
+          hasNextPage: false,
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
+
+    render(
+      <MemoryRouter initialEntries={['/anna']}>
+        <AppShell />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('Lista 6')).toBeInTheDocument()
+    expect(screen.getByText('Visar 1 av 6')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Visa fler' }))
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith('/api/lists?page=2&pageSize=5', expect.any(Object))
+    })
+    expect(await screen.findByText('Lista 1')).toBeInTheDocument()
+    expect(screen.getByText('Visar 2 av 6')).toBeInTheDocument()
+    expect(screen.getByText('Lista 6')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Listor per sida'), { target: { value: 'all' } })
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith('/api/lists?page=1&pageSize=all', expect.any(Object))
+    })
+    expect(await screen.findByText('Visar 6 av 6')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Visa fler' })).not.toBeInTheDocument()
   })
 
   it('loads the statistics page and lets the user switch ranges', async () => {
@@ -114,9 +273,11 @@ describe('ListsOverviewPage', () => {
           averagePricedItemAmount: 62.46,
           previousAveragePricedItemAmount: 54.44,
           spendSeries: [
-            { label: '1', bucketStart: '2026-03-01T00:00:00Z', amount: 499, cumulativeAmount: 499, quantity: 8 },
-            { label: '15', bucketStart: '2026-03-15T00:00:00Z', amount: 500, cumulativeAmount: 999, quantity: 7 },
-            { label: '28', bucketStart: '2026-03-28T00:00:00Z', amount: 500, cumulativeAmount: 1499, quantity: 9 },
+            { label: '1', bucketStart: '2026-03-01T00:00:00Z', amount: 800, cumulativeAmount: 800, quantity: 8 },
+            { label: '8', bucketStart: '2026-03-08T00:00:00Z', amount: 0, cumulativeAmount: 800, quantity: 0 },
+            { label: '15', bucketStart: '2026-03-15T00:00:00Z', amount: 200, cumulativeAmount: 1000, quantity: 7 },
+            { label: '22', bucketStart: '2026-03-22T00:00:00Z', amount: 0, cumulativeAmount: 1000, quantity: 0 },
+            { label: '28', bucketStart: '2026-03-28T00:00:00Z', amount: 499, cumulativeAmount: 1499, quantity: 9 },
           ],
           topItems: [
             { title: 'Tortillabröd', quantity: 5, spentAmount: 210, imageUrl: 'https://example.com/tortilla.jpg' },
@@ -166,8 +327,28 @@ describe('ListsOverviewPage', () => {
     expect(screen.getByText('Tortillabröd')).toBeInTheDocument()
     expect(container.querySelector('img[src="https://example.com/tortilla.jpg"]')).not.toBeNull()
     expect(screen.getByRole('link', { name: 'Alla listor' })).toHaveAttribute('href', '/anna')
+    expect(container.querySelector('.stats-hero-chart')).toHaveAttribute('aria-label', 'Kostnad per period')
+    expect(screen.getByRole('tab', { name: '1 mån' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: '3 mån' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'i år' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: '1 år' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'All time' })).toBeInTheDocument()
+    expect(screen.getByText('Tryck på grafen för värden')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('tab', { name: 'År' }))
+    const monthLinePath = container.querySelector('.stats-chart__line')?.getAttribute('d')
+    expect(monthLinePath).toContain('M 16.00 18.00')
+    expect(monthLinePath).toContain('L 159.00 180.00')
+    expect(monthLinePath).toContain('L 302.00 99.27')
+    expect(monthLinePath).not.toContain('87.50 234.00')
+    expect(monthLinePath).not.toContain('230.50 234.00')
+
+    expect(screen.getByRole('button', { name: /Visa 1 mars 2026: 800/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Visa 15 mars 2026: 200/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Visa 28 mars 2026: 499/ })).toBeInTheDocument()
+    expect(container.querySelector('.stats-chart-tooltip')?.textContent).toContain('499')
+    expect(container.querySelector('.stats-chart-tooltip')?.textContent).toContain('9 varor')
+
+    fireEvent.click(screen.getByRole('tab', { name: '1 år' }))
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith('/api/lists/stats?range=year', expect.any(Object))

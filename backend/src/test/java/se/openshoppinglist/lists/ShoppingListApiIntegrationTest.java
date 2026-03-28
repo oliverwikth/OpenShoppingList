@@ -97,6 +97,41 @@ class ShoppingListApiIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void returnsPaginatedListOverviewAndSupportsAllPageSize() throws Exception {
+        for (int index = 1; index <= 6; index++) {
+            mockMvc.perform(post("/api/lists")
+                            .header(ActorDisplayName.HEADER_NAME, "anna")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {"name":"Lista %s"}
+                                    """.formatted(index)))
+                    .andExpect(status().isOk());
+        }
+
+        mockMvc.perform(get("/api/lists")
+                        .param("page", "2")
+                        .param("pageSize", "5"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page").value(2))
+                .andExpect(jsonPath("$.pageSize").value(5))
+                .andExpect(jsonPath("$.totalItems").value(6))
+                .andExpect(jsonPath("$.totalPages").value(2))
+                .andExpect(jsonPath("$.hasPreviousPage").value(true))
+                .andExpect(jsonPath("$.hasNextPage").value(false))
+                .andExpect(jsonPath("$.items.length()").value(1));
+
+        mockMvc.perform(get("/api/lists")
+                        .param("pageSize", "all"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page").value(1))
+                .andExpect(jsonPath("$.totalItems").value(6))
+                .andExpect(jsonPath("$.totalPages").value(1))
+                .andExpect(jsonPath("$.hasPreviousPage").value(false))
+                .andExpect(jsonPath("$.hasNextPage").value(false))
+                .andExpect(jsonPath("$.items.length()").value(6));
+    }
+
+    @Test
     void incrementsExistingQuantityAndRemovesItemWhenDecrementedToZero() throws Exception {
         MvcResult createListResult = mockMvc.perform(post("/api/lists")
                         .header(ActorDisplayName.HEADER_NAME, "anna")
@@ -305,6 +340,20 @@ class ShoppingListApiIntegrationTest extends PostgresIntegrationTest {
                 .andExpect(jsonPath("$.topItems[0].title").value("Tacobröd"))
                 .andExpect(jsonPath("$.topItems[0].quantity").value(2))
                 .andExpect(jsonPath("$.topItems[0].imageUrl").value("https://example.com/taco.jpg"));
+
+        mockMvc.perform(get("/api/lists/stats")
+                        .param("range", "ytd"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.range").value("ytd"))
+                .andExpect(jsonPath("$.currentPeriodLabel").value("i år"))
+                .andExpect(jsonPath("$.spentAmount").value(79.8));
+
+        mockMvc.perform(get("/api/lists/stats")
+                        .param("range", "year"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.range").value("year"))
+                .andExpect(jsonPath("$.currentPeriodLabel").value("senaste året"))
+                .andExpect(jsonPath("$.spentAmount").value(79.8));
     }
 
     @Test

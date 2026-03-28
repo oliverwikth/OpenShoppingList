@@ -23,6 +23,17 @@ public final class ShoppingListViews {
     ) {
     }
 
+    public record ShoppingListOverviewPageView(
+            List<ShoppingListOverviewView> items,
+            int page,
+            int pageSize,
+            long totalItems,
+            int totalPages,
+            boolean hasPreviousPage,
+            boolean hasNextPage
+    ) {
+    }
+
     public record ShoppingListDetailView(
             UUID id,
             String name,

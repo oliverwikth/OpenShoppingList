@@ -11,6 +11,16 @@ export interface ShoppingListOverview {
   lastModifiedByDisplayName: string
 }
 
+export interface ShoppingListOverviewPage {
+  items: ShoppingListOverview[]
+  page: number
+  pageSize: number
+  totalItems: number
+  totalPages: number
+  hasPreviousPage: boolean
+  hasNextPage: boolean
+}
+
 export interface ExternalSnapshot {
   provider: string
   articleId: string
@@ -80,7 +90,7 @@ export interface TopPurchasedItem {
 }
 
 export interface ShoppingStats {
-  range: 'month' | 'quarter' | 'year' | 'all'
+  range: 'month' | 'quarter' | 'ytd' | 'year' | 'all'
   rangeStart: string
   rangeEnd: string
   currentPeriodLabel: string

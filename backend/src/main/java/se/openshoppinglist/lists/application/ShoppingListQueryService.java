@@ -16,6 +16,7 @@ import static se.openshoppinglist.lists.application.ShoppingListViews.ActivityVi
 import static se.openshoppinglist.lists.application.ShoppingListViews.ExternalSnapshotView;
 import static se.openshoppinglist.lists.application.ShoppingListViews.ShoppingListDetailView;
 import static se.openshoppinglist.lists.application.ShoppingListViews.ShoppingListItemView;
+import static se.openshoppinglist.lists.application.ShoppingListViews.ShoppingListOverviewPageView;
 import static se.openshoppinglist.lists.application.ShoppingListViews.ShoppingListOverviewView;
 
 @Service
@@ -38,6 +39,28 @@ public class ShoppingListQueryService {
                 .sorted(Comparator.comparing(ShoppingList::getUpdatedAt).reversed())
                 .map(this::toOverviewView)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public ShoppingListOverviewPageView findListsPage(Integer requestedPage, Integer requestedPageSize) {
+        long totalItems = shoppingListRepository.count();
+        int safePageSize = resolvePageSize(requestedPageSize, totalItems);
+        int totalPages = Math.max(1, (int) Math.ceil(totalItems / (double) safePageSize));
+        int page = requestedPage == null ? 1 : Math.max(1, Math.min(requestedPage, totalPages));
+
+        List<ShoppingListOverviewView> items = shoppingListRepository.findPage(page - 1, safePageSize).stream()
+                .map(this::toOverviewView)
+                .toList();
+
+        return new ShoppingListOverviewPageView(
+                items,
+                page,
+                safePageSize,
+                totalItems,
+                totalPages,
+                page > 1,
+                page < totalPages
+        );
     }
 
     @Transactional(readOnly = true)
@@ -115,5 +138,17 @@ public class ShoppingListQueryService {
                 activityLogEntry.getActorDisplayName(),
                 activityLogEntry.getOccurredAt()
         );
+    }
+
+    private int resolvePageSize(Integer requestedPageSize, long totalItems) {
+        if (requestedPageSize == null) {
+            return Math.max(1, (int) totalItems);
+        }
+
+        if (requestedPageSize <= 0) {
+            throw new IllegalArgumentException("List page size must be greater than zero.");
+        }
+
+        return requestedPageSize;
     }
 }
