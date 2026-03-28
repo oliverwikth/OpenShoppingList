@@ -351,6 +351,154 @@ describe('ShoppingListDetailPage', () => {
     })
   })
 
+  it('flushes multiple different retailer items from the same search', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    let listFetchCount = 0
+
+    fetchMock.mockImplementation(async (input, init) => {
+      const url = String(input)
+
+      if (url === '/api/lists/list-1' && (!init?.method || init.method === 'GET')) {
+        listFetchCount += 1
+        return new Response(JSON.stringify(listFetchCount === 1 ? initialList : {
+          ...initialList,
+          items: [
+            {
+              id: 'item-1',
+              itemType: 'EXTERNAL_ARTICLE',
+              title: 'Taco Bröd',
+              checked: false,
+              checkedAt: null,
+              checkedByDisplayName: null,
+              lastModifiedByDisplayName: 'anna',
+              createdAt: '2026-03-26T18:05:00Z',
+              updatedAt: '2026-03-26T18:05:00Z',
+              position: 1,
+              quantity: 1,
+              manualNote: '',
+              externalSnapshot: {
+                provider: 'willys',
+                articleId: 'taco-1',
+                subtitle: '8-pack',
+                imageUrl: null,
+                category: 'Taco',
+                priceAmount: 29.9,
+                currency: 'SEK',
+              },
+            },
+            {
+              id: 'item-2',
+              itemType: 'EXTERNAL_ARTICLE',
+              title: 'Taco Färs',
+              checked: false,
+              checkedAt: null,
+              checkedByDisplayName: null,
+              lastModifiedByDisplayName: 'anna',
+              createdAt: '2026-03-26T18:05:10Z',
+              updatedAt: '2026-03-26T18:05:10Z',
+              position: 2,
+              quantity: 1,
+              manualNote: '',
+              externalSnapshot: {
+                provider: 'willys',
+                articleId: 'taco-2',
+                subtitle: '400g',
+                imageUrl: null,
+                category: 'Taco',
+                priceAmount: 59.9,
+                currency: 'SEK',
+              },
+            },
+          ],
+          recentActivities: [],
+        }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+
+      if (url.startsWith('/api/retailer-search?q=taco&page=0')) {
+        return new Response(
+          JSON.stringify(
+            createSearchResponse('taco', [
+              {
+                ...createRetailerResult('taco-1', 'Taco Bröd'),
+                subtitle: '8-pack',
+                category: 'Taco',
+                priceAmount: 29.9,
+              },
+              {
+                ...createRetailerResult('taco-2', 'Taco Färs'),
+                subtitle: '400g',
+                category: 'Taco',
+                priceAmount: 59.9,
+              },
+            ], { totalPages: 1, totalResults: 2 }),
+          ),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        )
+      }
+
+      if (url === '/api/lists/list-1/items/external') {
+        const body = JSON.parse(String(init?.body))
+        return new Response(
+          JSON.stringify({
+            id: body.articleId === 'taco-1' ? 'item-1' : 'item-2',
+            itemType: 'EXTERNAL_ARTICLE',
+            title: body.title,
+            checked: false,
+            checkedAt: null,
+            checkedByDisplayName: null,
+            lastModifiedByDisplayName: 'anna',
+            createdAt: body.articleId === 'taco-1' ? '2026-03-26T18:05:00Z' : '2026-03-26T18:05:10Z',
+            updatedAt: body.articleId === 'taco-1' ? '2026-03-26T18:05:00Z' : '2026-03-26T18:05:10Z',
+            position: body.articleId === 'taco-1' ? 1 : 2,
+            quantity: body.quantity,
+            manualNote: '',
+            externalSnapshot: {
+              provider: body.provider,
+              articleId: body.articleId,
+              subtitle: body.subtitle,
+              imageUrl: body.imageUrl,
+              category: body.category,
+              priceAmount: body.priceAmount,
+              currency: body.currency,
+            },
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        )
+      }
+
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+
+    render(
+      <MemoryRouter initialEntries={['/anna/lists/list-1/varor/search']}>
+        <AppShell />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('Veckohandling')).toBeInTheDocument()
+
+    await userEvent.type(screen.getByLabelText('Sök artikel'), 'taco')
+    await userEvent.click(await screen.findByRole('button', { name: 'Lägg till Taco Bröd' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Lägg till Taco Färs' }))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Rensa sökning' }))
+
+    await waitFor(() => {
+      const externalPosts = fetchMock.mock.calls.filter(([url]) => url === '/api/lists/list-1/items/external')
+      expect(externalPosts).toHaveLength(2)
+      expect(externalPosts.map(([, init]) => JSON.parse(String(init?.body)).articleId)).toEqual(['taco-1', 'taco-2'])
+    })
+  })
+
   it('uses varor as the back target from the search view', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
       new Response(JSON.stringify(initialList), {

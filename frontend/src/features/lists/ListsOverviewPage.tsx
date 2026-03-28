@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import type { FormEvent } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import type { CSSProperties, FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { createList, fetchLists } from './api'
 import { useActorName } from '../actor/useActorName'
@@ -23,11 +23,52 @@ export function ListsOverviewPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
+  const [keyboardInset, setKeyboardInset] = useState(0)
   const [error, setError] = useState<string | null>(null)
+  const newListInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     void loadLists()
   }, [])
+
+  useEffect(() => {
+    if (!isCreateOpen) {
+      setKeyboardInset(0)
+      return
+    }
+
+    const viewport = window.visualViewport
+    if (!viewport) {
+      return
+    }
+
+    const updateKeyboardInset = () => {
+      const nextInset = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)
+      setKeyboardInset(nextInset)
+    }
+
+    updateKeyboardInset()
+    viewport.addEventListener('resize', updateKeyboardInset)
+    viewport.addEventListener('scroll', updateKeyboardInset)
+
+    return () => {
+      viewport.removeEventListener('resize', updateKeyboardInset)
+      viewport.removeEventListener('scroll', updateKeyboardInset)
+    }
+  }, [isCreateOpen])
+
+  useEffect(() => {
+    if (!isCreateOpen) {
+      return
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      newListInputRef.current?.focus()
+      newListInputRef.current?.scrollIntoView({ block: 'center', inline: 'nearest' })
+    }, 0)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [isCreateOpen])
 
   async function loadLists() {
     setIsLoading(true)
@@ -117,7 +158,12 @@ export function ListsOverviewPage() {
       </section>
 
       {isCreateOpen ? (
-        <div aria-modal="true" className="modal-backdrop" role="dialog">
+        <div
+          aria-modal="true"
+          className="modal-backdrop"
+          role="dialog"
+          style={{ '--keyboard-inset': `${keyboardInset}px` } as CSSProperties}
+        >
           <form className="modal-card inline-form" onSubmit={handleCreateList}>
             <div className="modal-header">
               <h2>Ny lista</h2>
@@ -129,6 +175,7 @@ export function ListsOverviewPage() {
               aria-label="Listnamn"
               autoFocus
               className="search-input"
+              ref={newListInputRef}
               value={newListName}
               onChange={(event) => setNewListName(event.target.value)}
             />

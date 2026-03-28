@@ -185,13 +185,14 @@ export function ShoppingListDetailPage() {
     setIsFlushingSearchAdds(true)
     setError(null)
     try {
-      const savedItems = await Promise.all(
-        pendingEntries.map((pendingAdd) =>
+      const savedItems: ShoppingListItem[] = []
+      for (const pendingAdd of pendingEntries) {
+        savedItems.push(
           pendingAdd.kind === 'manual'
-            ? addManualItem(actorName, listId, pendingAdd.title, pendingAdd.note, pendingAdd.quantity)
-            : addExternalItem(actorName, listId, pendingAdd.result, pendingAdd.quantity),
-        ),
-      )
+            ? await addManualItem(actorName, listId, pendingAdd.title, pendingAdd.note, pendingAdd.quantity)
+            : await addExternalItem(actorName, listId, pendingAdd.result, pendingAdd.quantity),
+        )
+      }
       patchItemsInList(savedItems)
       pendingSearchAddsRef.current = {}
       setPendingSearchAdds({})

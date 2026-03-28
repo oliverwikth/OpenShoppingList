@@ -647,19 +647,22 @@
   z-index: 40;
   display: grid;
   align-items: end;
-  padding: 16px;
+  padding: 16px 16px calc(16px + var(--keyboard-inset, 0px) + env(safe-area-inset-bottom));
   background: rgba(21, 21, 21, 0.28);
+  transition: padding-bottom 180ms ease;
 }
 
 .modal-card {
   width: 100%;
   max-width: 520px;
   margin: 0 auto;
+  max-height: calc(100vh - 32px - var(--keyboard-inset, 0px) - env(safe-area-inset-bottom));
   background: var(--surface-strong);
   border: 1px solid var(--line);
   border-radius: 24px;
   padding: 18px;
   box-shadow: var(--shadow);
+  overflow: auto;
 }
 
 .modal-header {
@@ -735,6 +738,7 @@
 
   .modal-backdrop {
     align-items: center;
+    padding: 16px;
   }
 
   .overview-body > :first-child,
