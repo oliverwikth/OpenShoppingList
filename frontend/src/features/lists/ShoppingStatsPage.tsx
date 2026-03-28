@@ -174,7 +174,6 @@ export function ShoppingStatsPage() {
 
                   return (
                     <article className="stats-ranking-row" key={`${item.title}-${index}`}>
-                      <span className="stats-ranking-row__index">{String(index + 1).padStart(2, '0')}</span>
                       <div className="stats-ranking-row__media" aria-hidden="true">
                         {item.imageUrl ? <img alt="" src={item.imageUrl} /> : <span>{topItemInitials(item.title)}</span>}
                       </div>
