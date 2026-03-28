@@ -162,15 +162,20 @@ public class ShoppingListController {
     }
 
     @PostMapping("/{listId}/items/{itemId}/decrement")
-    void decrementItem(
+    ShoppingListViews.ItemQuantityChangeView decrementItem(
             @PathVariable UUID listId,
             @PathVariable UUID itemId,
             HttpServletRequest request
     ) {
-        shoppingListCommandService.decreaseItemQuantity(
+        ShoppingListCommandService.ItemQuantityChange result = shoppingListCommandService.decreaseItemQuantity(
                 listId,
                 itemId,
                 actorContextResolver.resolve(request)
+        );
+        return new ShoppingListViews.ItemQuantityChangeView(
+                result.itemId(),
+                result.removed(),
+                result.item() == null ? null : shoppingListQueryService.toItemView(result.item())
         );
     }
 

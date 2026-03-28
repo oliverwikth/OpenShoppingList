@@ -58,6 +58,12 @@ export interface ShoppingListDetail {
   recentActivities: ActivityEntry[]
 }
 
+export interface ItemQuantityChange {
+  itemId: string
+  removed: boolean
+  item: ShoppingListItem | null
+}
+
 export interface RetailerSearchResult {
   provider: string
   articleId: string

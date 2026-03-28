@@ -185,16 +185,16 @@ export function ShoppingListDetailPage() {
     setIsFlushingSearchAdds(true)
     setError(null)
     try {
-      await Promise.all(
+      const savedItems = await Promise.all(
         pendingEntries.map((pendingAdd) =>
           pendingAdd.kind === 'manual'
             ? addManualItem(actorName, listId, pendingAdd.title, pendingAdd.note, pendingAdd.quantity)
             : addExternalItem(actorName, listId, pendingAdd.result, pendingAdd.quantity),
         ),
       )
+      patchItemsInList(savedItems)
       pendingSearchAddsRef.current = {}
       setPendingSearchAdds({})
-      await loadList()
     } catch (flushError) {
       setError(flushError instanceof Error ? flushError.message : 'Kunde inte spara sökvalen.')
     } finally {
@@ -355,6 +355,54 @@ export function ShoppingListDetailPage() {
     })
   }
 
+  function patchItemInList(updatedItem: ShoppingListItem) {
+    setList((currentList) => {
+      if (!currentList) {
+        return currentList
+      }
+
+      return {
+        ...currentList,
+        items: upsertListItem(currentList.items, updatedItem),
+        lastModifiedByDisplayName: updatedItem.lastModifiedByDisplayName,
+        updatedAt: updatedItem.updatedAt,
+      }
+    })
+  }
+
+  function patchItemsInList(updatedItems: ShoppingListItem[]) {
+    if (!updatedItems.length) {
+      return
+    }
+
+    setList((currentList) => {
+      if (!currentList) {
+        return currentList
+      }
+
+      const latestItem = updatedItems.reduce((latest, item) => (latest.updatedAt > item.updatedAt ? latest : item))
+      return {
+        ...currentList,
+        items: updatedItems.reduce((items, item) => upsertListItem(items, item), currentList.items),
+        lastModifiedByDisplayName: latestItem.lastModifiedByDisplayName,
+        updatedAt: latestItem.updatedAt,
+      }
+    })
+  }
+
+  function removeItemFromList(itemId: string) {
+    setList((currentList) => {
+      if (!currentList) {
+        return currentList
+      }
+
+      return {
+        ...currentList,
+        items: currentList.items.filter((item) => item.id !== itemId),
+      }
+    })
+  }
+
   function updateSearchValue(value: string) {
     setSearchInput(value)
     const nextSearchParams = new URLSearchParams(searchParams)
@@ -419,8 +467,12 @@ export function ShoppingListDetailPage() {
     setPendingActionKey(actionKey)
     setError(null)
     try {
-      await decrementItem(actorName, listId, item.id)
-      await loadList()
+      const result = await decrementItem(actorName, listId, item.id)
+      if (result.removed || !result.item) {
+        removeItemFromList(result.itemId)
+      } else {
+        patchItemInList(result.item)
+      }
     } catch (decreaseError) {
       setError(decreaseError instanceof Error ? decreaseError.message : 'Kunde inte minska antalet.')
     } finally {
@@ -433,12 +485,15 @@ export function ShoppingListDetailPage() {
     setPendingActionKey(actionKey)
     setError(null)
     try {
+      let updatedItem: ShoppingListItem | null = null
       if (item.itemType === 'MANUAL') {
-        await addManualItem(actorName, listId, item.title, item.manualNote ?? '')
+        updatedItem = await addManualItem(actorName, listId, item.title, item.manualNote ?? '')
       } else if (item.externalSnapshot) {
-        await addExternalItem(actorName, listId, toRetailerSearchResult(item))
+        updatedItem = await addExternalItem(actorName, listId, toRetailerSearchResult(item))
       }
-      await loadList()
+      if (updatedItem) {
+        patchItemInList(updatedItem)
+      }
     } catch (increaseError) {
       setError(increaseError instanceof Error ? increaseError.message : 'Kunde inte öka antalet.')
     } finally {
@@ -450,12 +505,13 @@ export function ShoppingListDetailPage() {
     setPendingActionKey(item.id)
     setError(null)
     try {
+      let updatedItem: ShoppingListItem
       if (item.checked) {
-        await uncheckItem(actorName, listId, item.id)
+        updatedItem = await uncheckItem(actorName, listId, item.id)
       } else {
-        await checkItem(actorName, listId, item.id)
+        updatedItem = await checkItem(actorName, listId, item.id)
       }
-      await loadList()
+      patchItemInList(updatedItem)
     } catch (toggleError) {
       setError(toggleError instanceof Error ? toggleError.message : 'Kunde inte uppdatera raden.')
     } finally {
@@ -468,8 +524,7 @@ export function ShoppingListDetailPage() {
     setPendingActionKey(actionKey)
     setError(null)
     try {
-      await toggleItemClaim(actorName, listId, item.id)
-      await loadList()
+      patchItemInList(await toggleItemClaim(actorName, listId, item.id))
     } catch (claimError) {
       setError(claimError instanceof Error ? claimError.message : 'Kunde inte uppdatera hämtning.')
     } finally {
@@ -979,6 +1034,15 @@ function itemActionKey(item: ShoppingListItem) {
 
 function claimActionKey(itemId: string) {
   return `claim:${itemId}`
+}
+
+function upsertListItem(items: ShoppingListItem[], updatedItem: ShoppingListItem) {
+  const existingItemIndex = items.findIndex((item) => item.id === updatedItem.id)
+  if (existingItemIndex === -1) {
+    return [...items, updatedItem].sort((left, right) => left.position - right.position)
+  }
+
+  return items.map((item) => (item.id === updatedItem.id ? updatedItem : item))
 }
 
 function toRetailerSearchResult(item: ShoppingListItem): RetailerSearchResult {

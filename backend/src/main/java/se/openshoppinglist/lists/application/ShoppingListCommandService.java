@@ -17,6 +17,9 @@ import se.openshoppinglist.retailer.application.RetailerArticleDetailsService;
 @Service
 public class ShoppingListCommandService {
 
+    public record ItemQuantityChange(UUID itemId, ShoppingListItem item, boolean removed) {
+    }
+
     private final ShoppingListRepository shoppingListRepository;
     private final DomainEventPublisher domainEventPublisher;
     private final RetailerArticleDetailsService retailerArticleDetailsService;
@@ -106,10 +109,11 @@ public class ShoppingListCommandService {
     }
 
     @Transactional
-    public void decreaseItemQuantity(UUID listId, UUID itemId, ActorDisplayName actorDisplayName) {
+    public ItemQuantityChange decreaseItemQuantity(UUID listId, UUID itemId, ActorDisplayName actorDisplayName) {
         ShoppingList shoppingList = requireList(listId);
-        shoppingList.decreaseItemQuantity(itemId, actorDisplayName, clock);
+        ShoppingListItem item = shoppingList.decreaseItemQuantity(itemId, actorDisplayName, clock);
         persistAndPublish(shoppingList);
+        return new ItemQuantityChange(itemId, item, item == null);
     }
 
     private ShoppingList requireList(UUID listId) {

@@ -54,6 +54,13 @@ public final class ShoppingListViews {
     ) {
     }
 
+    public record ItemQuantityChangeView(
+            UUID itemId,
+            boolean removed,
+            ShoppingListItemView item
+    ) {
+    }
+
     public record ExternalSnapshotView(
             String provider,
             String articleId,

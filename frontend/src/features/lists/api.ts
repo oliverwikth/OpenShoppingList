@@ -1,5 +1,6 @@
 import { apiRequest } from '../../shared/api/client'
 import type {
+  ItemQuantityChange,
   RetailerSearchResult,
   ShoppingListDetail,
   ShoppingListItem,
@@ -79,7 +80,7 @@ export function toggleItemClaim(actorName: string, listId: string, itemId: strin
 }
 
 export function decrementItem(actorName: string, listId: string, itemId: string) {
-  return apiRequest<void>(`/api/lists/${listId}/items/${itemId}/decrement`, {
+  return apiRequest<ItemQuantityChange>(`/api/lists/${listId}/items/${itemId}/decrement`, {
     method: 'POST',
     actorName,
   })

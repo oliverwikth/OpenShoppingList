@@ -164,7 +164,7 @@ public class ShoppingList extends AggregateRoot {
         return item;
     }
 
-    public void decreaseItemQuantity(UUID itemId, ActorDisplayName actorDisplayName, Clock clock) {
+    public ShoppingListItem decreaseItemQuantity(UUID itemId, ActorDisplayName actorDisplayName, Clock clock) {
         ensureActive();
         ShoppingListItem item = getItem(itemId);
         boolean shouldRemove = item.decreaseQuantity(actorDisplayName, clock);
@@ -172,11 +172,12 @@ public class ShoppingList extends AggregateRoot {
             items.remove(item);
             touch(actorDisplayName, clock);
             recordEvent(new ShoppingDomainEvent("shopping-list-item.removed", id, null, actorDisplayName.value(), updatedAt));
-            return;
+            return null;
         }
 
         touch(actorDisplayName, clock);
         recordEvent(new ShoppingDomainEvent("shopping-list-item.quantity-decreased", id, itemId, actorDisplayName.value(), updatedAt));
+        return item;
     }
 
     public UUID getId() {

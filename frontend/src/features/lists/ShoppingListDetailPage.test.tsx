@@ -602,7 +602,7 @@ describe('ShoppingListDetailPage', () => {
       new Response(
         JSON.stringify({
           id: 'item-1',
-          itemType: 'MANUAL',
+          itemType: 'EXTERNAL_ARTICLE',
           title: 'Kaffe',
           checked: false,
           checkedAt: null,
@@ -632,75 +632,31 @@ describe('ShoppingListDetailPage', () => {
     fetchMock.mockResolvedValueOnce(
       new Response(
         JSON.stringify({
-          ...initialList,
-          items: [
-            {
-              id: 'item-1',
-              itemType: 'EXTERNAL_ARTICLE',
-              title: 'Kaffe',
-              checked: false,
-              checkedAt: null,
-              checkedByDisplayName: null,
-              lastModifiedByDisplayName: 'anna',
-              createdAt: '2026-03-26T18:05:00Z',
-              updatedAt: '2026-03-26T18:05:30Z',
-              position: 1,
-              quantity: 3,
-              manualNote: '',
-              externalSnapshot: {
-                provider: 'willys',
-                articleId: 'coffee-1',
-                subtitle: '500g',
-                imageUrl: null,
-                category: 'Dryck',
-                priceAmount: 87.5,
-                currency: 'SEK',
-              },
+          itemId: 'item-1',
+          removed: false,
+          item: {
+            id: 'item-1',
+            itemType: 'EXTERNAL_ARTICLE',
+            title: 'Kaffe',
+            checked: false,
+            checkedAt: null,
+            checkedByDisplayName: null,
+            lastModifiedByDisplayName: 'anna',
+            createdAt: '2026-03-26T18:05:00Z',
+            updatedAt: '2026-03-26T18:06:00Z',
+            position: 1,
+            quantity: 2,
+            manualNote: '',
+            externalSnapshot: {
+              provider: 'willys',
+              articleId: 'coffee-1',
+              subtitle: '500g',
+              imageUrl: null,
+              category: 'Dryck',
+              priceAmount: 87.5,
+              currency: 'SEK',
             },
-          ],
-          recentActivities: [],
-        }),
-        {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        },
-      ),
-    )
-    fetchMock.mockResolvedValueOnce(
-      new Response(null, {
-        status: 200,
-      }),
-    )
-    fetchMock.mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({
-          ...initialList,
-          items: [
-            {
-              id: 'item-1',
-              itemType: 'MANUAL',
-              title: 'Kaffe',
-              checked: false,
-              checkedAt: null,
-              checkedByDisplayName: null,
-              lastModifiedByDisplayName: 'anna',
-              createdAt: '2026-03-26T18:05:00Z',
-              updatedAt: '2026-03-26T18:06:00Z',
-              position: 1,
-              quantity: 2,
-              manualNote: '',
-              externalSnapshot: {
-                provider: 'willys',
-                articleId: 'coffee-1',
-                subtitle: '500g',
-                imageUrl: null,
-                category: 'Dryck',
-                priceAmount: 87.5,
-                currency: 'SEK',
-              },
-            },
-          ],
-          recentActivities: [],
+          },
         }),
         {
           status: 200,
