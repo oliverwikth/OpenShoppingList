@@ -369,6 +369,27 @@ describe('ShoppingListDetailPage', () => {
     expect(screen.getByRole('link', { name: '←' })).toHaveAttribute('href', '/anna/lists/list-1/varor')
   })
 
+  it('focuses the search input immediately when opening search from varor', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(JSON.stringify(initialList), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+
+    render(
+      <MemoryRouter initialEntries={['/anna/lists/list-1/varor']}>
+        <AppShell />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('Veckohandling')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Öppna sök' }))
+
+    expect(await screen.findByLabelText('Sök artikel')).toHaveFocus()
+  })
+
   it('clears the search input from the clear button', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
       new Response(JSON.stringify(initialList), {

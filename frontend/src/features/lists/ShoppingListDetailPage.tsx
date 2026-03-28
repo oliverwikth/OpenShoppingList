@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
+import { useDeferredValue, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useActorName } from '../actor/useActorName'
@@ -218,16 +218,12 @@ export function ShoppingListDetailPage() {
     }
   }, [currentView, flushPendingSearchAdds, searchInput])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (currentView !== 'search') {
       return
     }
 
-    const timeoutId = window.setTimeout(() => {
-      searchInputRef.current?.focus()
-    }, 50)
-
-    return () => window.clearTimeout(timeoutId)
+    searchInputRef.current?.focus()
   }, [currentView])
 
   useEffect(() => {
