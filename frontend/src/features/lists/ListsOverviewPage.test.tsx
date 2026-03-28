@@ -119,8 +119,8 @@ describe('ListsOverviewPage', () => {
             { label: '28', bucketStart: '2026-03-28T00:00:00Z', amount: 500, cumulativeAmount: 1499, quantity: 9 },
           ],
           topItems: [
-            { title: 'Tortillabröd', quantity: 5, spentAmount: 210 },
-            { title: 'Kaffe', quantity: 4, spentAmount: 340 },
+            { title: 'Tortillabröd', quantity: 5, spentAmount: 210, imageUrl: 'https://example.com/tortilla.jpg' },
+            { title: 'Kaffe', quantity: 4, spentAmount: 340, imageUrl: null },
           ],
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
@@ -149,14 +149,14 @@ describe('ListsOverviewPage', () => {
             { label: 'mars', bucketStart: '2026-03-01T00:00:00Z', amount: 1499, cumulativeAmount: 3999, quantity: 32 },
           ],
           topItems: [
-            { title: 'Kaffe', quantity: 12, spentAmount: 999 },
+            { title: 'Kaffe', quantity: 12, spentAmount: 999, imageUrl: null },
           ],
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
       ),
     )
 
-    render(
+    const { container } = render(
       <MemoryRouter initialEntries={['/anna/statistik']}>
         <AppShell />
       </MemoryRouter>,
@@ -164,6 +164,7 @@ describe('ListsOverviewPage', () => {
 
     expect(await screen.findByText('Din shopping i siffror')).toBeInTheDocument()
     expect(screen.getByText('Tortillabröd')).toBeInTheDocument()
+    expect(container.querySelector('img[src="https://example.com/tortilla.jpg"]')).not.toBeNull()
     expect(screen.getByRole('link', { name: 'Alla listor' })).toHaveAttribute('href', '/anna')
 
     fireEvent.click(screen.getByRole('tab', { name: 'År' }))

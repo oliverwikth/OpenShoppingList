@@ -91,7 +91,8 @@ public class ShoppingStatsQueryService {
                         item.getQuantity(),
                         item.getCheckedAt(),
                         item.getSourcePriceAmount(),
-                        item.getSourceCurrency()
+                        item.getSourceCurrency(),
+                        item.getSourceImageUrl()
                 ))
                 .toList();
     }
@@ -162,9 +163,10 @@ public class ShoppingStatsQueryService {
             aggregates.compute(item.title(), (title, current) -> {
                 BigDecimal spentAmount = pricedAmount(item);
                 if (current == null) {
-                    return new ItemAggregate(item.quantity(), spentAmount);
+                    return new ItemAggregate(item.quantity(), spentAmount, item.imageUrl());
                 }
-                return new ItemAggregate(current.quantity() + item.quantity(), current.spentAmount().add(spentAmount));
+                String imageUrl = current.imageUrl() != null && !current.imageUrl().isBlank() ? current.imageUrl() : item.imageUrl();
+                return new ItemAggregate(current.quantity() + item.quantity(), current.spentAmount().add(spentAmount), imageUrl);
             });
         }
 
@@ -177,7 +179,8 @@ public class ShoppingStatsQueryService {
                 .map(entry -> new ShoppingListViews.TopPurchasedItemView(
                         entry.getKey(),
                         entry.getValue().quantity(),
-                        entry.getValue().spentAmount().setScale(2, RoundingMode.HALF_UP)
+                        entry.getValue().spentAmount().setScale(2, RoundingMode.HALF_UP),
+                        entry.getValue().imageUrl()
                 ))
                 .toList();
     }
@@ -206,7 +209,8 @@ public class ShoppingStatsQueryService {
             int quantity,
             Instant checkedAt,
             BigDecimal priceAmount,
-            String currency
+            String currency,
+            String imageUrl
     ) {
     }
 
@@ -218,7 +222,7 @@ public class ShoppingStatsQueryService {
     ) {
     }
 
-    private record ItemAggregate(int quantity, BigDecimal spentAmount) {
+    private record ItemAggregate(int quantity, BigDecimal spentAmount, String imageUrl) {
     }
 
     private record Window(Instant start, Instant end, String label) {

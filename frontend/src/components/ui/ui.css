@@ -306,7 +306,7 @@
 
 .stats-ranking-row {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto auto 1fr auto;
   gap: 14px;
   align-items: center;
   padding: 14px 16px;
@@ -328,9 +328,31 @@
   font-weight: 900;
 }
 
+.stats-ranking-row__media {
+  width: 54px;
+  height: 54px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--surface-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.76rem;
+  font-weight: 900;
+  color: var(--brand);
+}
+
+.stats-ranking-row__media img,
+.stats-ranking-row__media > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .stats-ranking-row__body {
   display: grid;
   gap: 8px;
+  min-width: 0;
 }
 
 .stats-ranking-row__meta {

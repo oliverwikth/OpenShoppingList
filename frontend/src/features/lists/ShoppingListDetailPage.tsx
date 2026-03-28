@@ -65,6 +65,9 @@ export function ShoppingListDetailPage() {
   const inFlightVarorAdjustmentsRef = useRef<Record<string, number>>({})
   const varorAdjustmentTimeoutsRef = useRef<Record<string, number>>({})
   const searchResultsStateRef = useRef<SearchResultsState>({ query: '', pages: {} })
+  const localMutationVersionRef = useRef(0)
+  const listLoadRequestIdRef = useRef(0)
+  const appliedListLoadRequestIdRef = useRef(0)
   const reconnectTimeoutRef = useRef<number | null>(null)
   const pollingIntervalRef = useRef<number | null>(null)
 
@@ -80,6 +83,9 @@ export function ShoppingListDetailPage() {
   const previousViewRef = useRef(currentView)
 
   const loadList = useEffectEvent(async (options: { background?: boolean } = {}) => {
+    const requestId = ++listLoadRequestIdRef.current
+    const mutationVersionAtStart = localMutationVersionRef.current
+
     if (!options.background || list === null) {
       setIsLoading(true)
     }
@@ -87,6 +93,11 @@ export function ShoppingListDetailPage() {
     setError(null)
     try {
       const loadedList = await fetchList(listId)
+      if (mutationVersionAtStart < localMutationVersionRef.current || requestId < appliedListLoadRequestIdRef.current) {
+        return
+      }
+
+      appliedListLoadRequestIdRef.current = requestId
       setList(applyPendingVarorAdjustmentsToList(loadedList))
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Kunde inte hämta listan.')
@@ -102,6 +113,9 @@ export function ShoppingListDetailPage() {
     pendingVarorAdjustmentsRef.current = {}
     inFlightVarorAdjustmentsRef.current = {}
     pendingSearchAddsRef.current = {}
+    localMutationVersionRef.current = 0
+    listLoadRequestIdRef.current = 0
+    appliedListLoadRequestIdRef.current = 0
     setPendingSearchAdds({})
     void loadList()
   }, [listId])
@@ -411,6 +425,10 @@ export function ShoppingListDetailPage() {
     setPendingSearchAdds(nextPendingSearchAdds)
   }
 
+  function markLocalMutationApplied() {
+    localMutationVersionRef.current += 1
+  }
+
   function incrementPendingSearchAdd(actionKey: string, pendingAdd: PendingSearchAdd) {
     const currentPendingAdd = pendingSearchAddsRef.current[actionKey]
     setPendingSearchAddsState({
@@ -444,6 +462,7 @@ export function ShoppingListDetailPage() {
   }
 
   function patchItemInList(updatedItem: ShoppingListItem) {
+    markLocalMutationApplied()
     setList((currentList) => {
       if (!currentList) {
         return currentList
@@ -463,6 +482,7 @@ export function ShoppingListDetailPage() {
       return
     }
 
+    markLocalMutationApplied()
     setList((currentList) => {
       if (!currentList) {
         return currentList
@@ -479,6 +499,7 @@ export function ShoppingListDetailPage() {
   }
 
   function removeItemFromList(itemId: string) {
+    markLocalMutationApplied()
     setList((currentList) => {
       if (!currentList) {
         return currentList

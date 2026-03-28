@@ -3,12 +3,20 @@ package se.openshoppinglist.retailer.infrastructure;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
+import java.net.ConnectException;
+import java.net.HttpURLConnection;
+import java.net.SocketTimeoutException;
+import java.net.UnknownHostException;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.core.NestedExceptionUtils;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
+import org.springframework.web.client.ResourceAccessException;
 import se.openshoppinglist.config.AppProperties;
 import se.openshoppinglist.retailer.application.RetailerSearchPort;
 import se.openshoppinglist.retailer.domain.RetailerArticleSearchResult;
@@ -55,18 +63,57 @@ class WillysRetailerSearchAdapter implements RetailerSearchPort {
             boolean hasMoreResults = currentPage + 1 < totalPages;
             return new RetailerSearchResponse("willys", query, currentPage, totalPages, totalResults, hasMoreResults, true, null, results);
         } catch (RestClientException exception) {
-            return new RetailerSearchResponse(
-                    "willys",
-                    query,
-                    page,
-                    0,
-                    0,
-                    false,
-                    false,
-                    "Willys search is temporarily unavailable.",
-                    List.of()
-            );
+            return unavailableResponse(query, page, exception);
         }
+    }
+
+    private RetailerSearchResponse unavailableResponse(String query, int page, RestClientException exception) {
+        return new RetailerSearchResponse(
+                "willys",
+                query,
+                page,
+                0,
+                0,
+                false,
+                false,
+                failureMessage(exception),
+                List.of()
+        );
+    }
+
+    static String failureMessage(RestClientException exception) {
+        if (exception instanceof RestClientResponseException responseException) {
+            return failureMessageForStatus(responseException.getStatusCode());
+        }
+
+        if (exception instanceof ResourceAccessException) {
+            Throwable cause = NestedExceptionUtils.getMostSpecificCause(exception);
+            if (cause instanceof SocketTimeoutException) {
+                return "Willys search timed out while waiting for a response.";
+            }
+            if (cause instanceof ConnectException || cause instanceof UnknownHostException) {
+                return "Willys search failed before a response was received. Could not connect to Willys.";
+            }
+        }
+
+        return "Willys search failed before a response was received. Cause: unknown upstream error.";
+    }
+
+    private static String failureMessageForStatus(HttpStatusCode statusCode) {
+        int value = statusCode.value();
+        if (value == 429) {
+            return "Willys search was rate limited by Willys (HTTP 429).";
+        }
+        if (value == HttpURLConnection.HTTP_FORBIDDEN || value == HttpURLConnection.HTTP_UNAUTHORIZED) {
+            return "Willys blocked the search request (HTTP " + value + ").";
+        }
+        if (value == HttpURLConnection.HTTP_CLIENT_TIMEOUT || value == HttpURLConnection.HTTP_GATEWAY_TIMEOUT) {
+            return "Willys search timed out upstream (HTTP " + value + ").";
+        }
+        if (statusCode.is5xxServerError()) {
+            return "Willys search failed at Willys with a server error (HTTP " + value + ").";
+        }
+        return "Willys search failed at Willys (HTTP " + value + ").";
     }
 
     private RetailerArticleSearchResult toSearchResult(WillysProduct product) {

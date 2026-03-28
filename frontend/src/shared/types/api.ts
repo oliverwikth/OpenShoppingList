@@ -76,6 +76,7 @@ export interface TopPurchasedItem {
   title: string
   quantity: number
   spentAmount: number
+  imageUrl: string | null
 }
 
 export interface ShoppingStats {

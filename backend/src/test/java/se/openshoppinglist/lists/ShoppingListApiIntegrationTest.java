@@ -258,7 +258,7 @@ class ShoppingListApiIntegrationTest extends PostgresIntegrationTest {
                                   "articleId":"taco-1",
                                   "title":"Tacobröd",
                                   "subtitle":"8-pack",
-                                  "imageUrl":null,
+                                  "imageUrl":"https://example.com/taco.jpg",
                                   "category":"Taco",
                                   "priceAmount":39.90,
                                   "currency":"SEK",
@@ -290,7 +290,8 @@ class ShoppingListApiIntegrationTest extends PostgresIntegrationTest {
                 .andExpect(jsonPath("$.currency").value("SEK"))
                 .andExpect(jsonPath("$.purchasedQuantity").value(2))
                 .andExpect(jsonPath("$.topItems[0].title").value("Tacobröd"))
-                .andExpect(jsonPath("$.topItems[0].quantity").value(2));
+                .andExpect(jsonPath("$.topItems[0].quantity").value(2))
+                .andExpect(jsonPath("$.topItems[0].imageUrl").value("https://example.com/taco.jpg"));
     }
 
     @Test

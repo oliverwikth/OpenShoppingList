@@ -175,6 +175,9 @@ export function ShoppingStatsPage() {
                   return (
                     <article className="stats-ranking-row" key={`${item.title}-${index}`}>
                       <span className="stats-ranking-row__index">{String(index + 1).padStart(2, '0')}</span>
+                      <div className="stats-ranking-row__media" aria-hidden="true">
+                        {item.imageUrl ? <img alt="" src={item.imageUrl} /> : <span>{topItemInitials(item.title)}</span>}
+                      </div>
                       <div className="stats-ranking-row__body">
                         <div className="stats-ranking-row__meta">
                           <strong>{item.title}</strong>
@@ -274,6 +277,18 @@ function formatMoney(amount: number, currency: string | null) {
     currency: currency ?? undefined,
     maximumFractionDigits: 0,
   }).format(amount)
+}
+
+function topItemInitials(title: string) {
+  const parts = title.trim().split(/\s+/).filter(Boolean)
+  if (!parts.length) {
+    return 'TXT'
+  }
+
+  return parts
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toLocaleUpperCase('sv-SE'))
+    .join('')
 }
 
 function formatPercentage(value: number) {

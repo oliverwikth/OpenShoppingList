@@ -974,6 +974,163 @@ describe('ShoppingListDetailPage', () => {
     })
   })
 
+  it('keeps a locally checked item checked when a stale websocket reload resolves afterward', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    let listFetchCount = 0
+    let resolveCheckRequest: ((value: Response) => void) | null = null
+    let resolveRealtimeReload: ((value: Response) => void) | null = null
+
+    fetchMock.mockImplementation((input, init) => {
+      const url = String(input)
+
+      if (url === '/api/lists/list-1' && (!init?.method || init.method === 'GET')) {
+        listFetchCount += 1
+
+        if (listFetchCount === 1) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                ...initialList,
+                items: [
+                  {
+                    id: 'item-1',
+                    itemType: 'MANUAL',
+                    title: 'Tomater',
+                    checked: false,
+                    checkedAt: null,
+                    checkedByDisplayName: null,
+                    claimedAt: null,
+                    claimedByDisplayName: null,
+                    lastModifiedByDisplayName: 'anna',
+                    createdAt: '2026-03-26T18:05:00Z',
+                    updatedAt: '2026-03-26T18:05:00Z',
+                    position: 1,
+                    quantity: 1,
+                    manualNote: '',
+                    externalSnapshot: null,
+                  },
+                ],
+                recentActivities: [],
+              }),
+              {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' },
+              },
+            ),
+          )
+        }
+
+        return new Promise((resolve) => {
+          resolveRealtimeReload = resolve
+        })
+      }
+
+      if (url === '/api/lists/list-1/items/item-1/check') {
+        return new Promise((resolve) => {
+          resolveCheckRequest = resolve
+        })
+      }
+
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+
+    render(
+      <MemoryRouter initialEntries={['/anna/lists/list-1/checklista']}>
+        <AppShell />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('Tomater')).toBeInTheDocument()
+    expect(mockSockets).toHaveLength(1)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Markera Tomater' }))
+
+    mockSockets[0].emitMessage({
+      eventType: 'shopping-list-item.checked',
+      listId: 'list-1',
+      itemId: 'item-1',
+      actorDisplayName: 'anna',
+      occurredAt: '2026-03-26T18:06:00Z',
+    })
+
+    await waitFor(() => {
+      expect(listFetchCount).toBe(2)
+      expect(resolveCheckRequest).not.toBeNull()
+      expect(resolveRealtimeReload).not.toBeNull()
+    })
+
+    await act(async () => {
+      resolveCheckRequest?.(
+        new Response(
+          JSON.stringify({
+            id: 'item-1',
+            itemType: 'MANUAL',
+            title: 'Tomater',
+            checked: true,
+            checkedAt: '2026-03-26T18:06:00Z',
+            checkedByDisplayName: 'anna',
+            claimedAt: null,
+            claimedByDisplayName: null,
+            lastModifiedByDisplayName: 'anna',
+            createdAt: '2026-03-26T18:05:00Z',
+            updatedAt: '2026-03-26T18:06:00Z',
+            position: 1,
+            quantity: 1,
+            manualNote: '',
+            externalSnapshot: null,
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        ),
+      )
+      await Promise.resolve()
+    })
+
+    expect(await screen.findByRole('button', { name: 'Avmarkera Tomater' })).toBeInTheDocument()
+
+    await act(async () => {
+      resolveRealtimeReload?.(
+        new Response(
+          JSON.stringify({
+            ...initialList,
+            items: [
+              {
+                id: 'item-1',
+                itemType: 'MANUAL',
+                title: 'Tomater',
+                checked: false,
+                checkedAt: null,
+                checkedByDisplayName: null,
+                claimedAt: null,
+                claimedByDisplayName: null,
+                lastModifiedByDisplayName: 'anna',
+                createdAt: '2026-03-26T18:05:00Z',
+                updatedAt: '2026-03-26T18:05:00Z',
+                position: 1,
+                quantity: 1,
+                manualNote: '',
+                externalSnapshot: null,
+              },
+            ],
+            recentActivities: [],
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        ),
+      )
+      await Promise.resolve()
+    })
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Avmarkera Tomater' })).toBeInTheDocument()
+    })
+    expect(screen.queryByRole('button', { name: 'Markera Tomater' })).not.toBeInTheDocument()
+  })
+
   it('falls back to polling when websocket is unavailable', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch')
     const intervals: Array<{ callback: () => void; delay: number }> = []

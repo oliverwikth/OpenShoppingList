@@ -93,7 +93,8 @@ public final class ShoppingListViews {
     public record TopPurchasedItemView(
             String title,
             Integer quantity,
-            BigDecimal spentAmount
+            BigDecimal spentAmount,
+            String imageUrl
     ) {
     }
 
