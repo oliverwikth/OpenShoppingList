@@ -11,6 +11,7 @@ public record RetailerArticleSearchResult(
         String category,
         BigDecimal priceAmount,
         String currency,
-        String rawPayloadJson
+        String rawPayloadJson,
+        int purchaseCount
 ) {
 }

@@ -107,6 +107,7 @@ export interface RetailerSearchResult {
   priceAmount: number | null
   currency: string | null
   rawPayloadJson: string
+  purchaseCount?: number
 }
 
 export interface RetailerSearchResponse {
