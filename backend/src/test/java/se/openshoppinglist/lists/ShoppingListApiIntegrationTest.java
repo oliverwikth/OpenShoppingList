@@ -133,6 +133,37 @@ class ShoppingListApiIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void ordersPaginatedListOverviewByCreatedTimeInsteadOfUpdatedTime() throws Exception {
+        importWillysList("Att handla 18 januari 2025", LocalDate.parse("2025-01-18"), 10.0, "100-old_ST");
+        importWillysList("Att handla 8 mars 2026", LocalDate.parse("2026-03-08"), 20.0, "100-new_ST");
+
+        MvcResult oldListDetails = mockMvc.perform(get("/api/lists")
+                        .param("pageSize", "all"))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        String oldListId = objectMapper.readTree(oldListDetails.getResponse().getContentAsString())
+                .path("items")
+                .path(1)
+                .path("id")
+                .asText();
+
+        mockMvc.perform(post("/api/lists/{listId}/items/manual", oldListId)
+                        .header(ActorDisplayName.HEADER_NAME, "oliver")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"title":"Tandkräm","note":"","quantity":1}
+                                """))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/lists")
+                        .param("pageSize", "all"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].name").value("Att handla 8 mars 2026"))
+                .andExpect(jsonPath("$.items[1].name").value("Att handla 18 januari 2025"));
+    }
+
+    @Test
     void incrementsExistingQuantityAndRemovesItemWhenDecrementedToZero() throws Exception {
         MvcResult createListResult = mockMvc.perform(post("/api/lists")
                         .header(ActorDisplayName.HEADER_NAME, "anna")
@@ -189,6 +220,59 @@ class ShoppingListApiIntegrationTest extends PostgresIntegrationTest {
         mockMvc.perform(get("/api/lists/{listId}", listId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items").isEmpty());
+    }
+
+    @Test
+    void returnsListItemsSortedByCreatedTimeInDetailView() throws Exception {
+        MvcResult createListResult = mockMvc.perform(post("/api/lists")
+                        .header(ActorDisplayName.HEADER_NAME, "anna")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Veckohandling"}
+                                """))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        String listId = readId(createListResult);
+
+        mockMvc.perform(post("/api/lists/{listId}/items/manual", listId)
+                        .header(ActorDisplayName.HEADER_NAME, "anna")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"title":"Äldre vara","note":"","quantity":1}
+                                """))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/lists/{listId}/items/manual", listId)
+                        .header(ActorDisplayName.HEADER_NAME, "anna")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"title":"Nyare vara","note":"","quantity":1}
+                                """))
+                .andExpect(status().isOk());
+
+        MvcResult initialDetails = mockMvc.perform(get("/api/lists/{listId}", listId))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        String firstItemId = objectMapper.readTree(initialDetails.getResponse().getContentAsString())
+                .path("items")
+                .path(0)
+                .path("id")
+                .asText();
+
+        mockMvc.perform(post("/api/lists/{listId}/items/{itemId}/quantity-adjust", listId, firstItemId)
+                        .header(ActorDisplayName.HEADER_NAME, "anna")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"delta":1}
+                                """))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/lists/{listId}", listId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].title").value("Äldre vara"))
+                .andExpect(jsonPath("$.items[1].title").value("Nyare vara"));
     }
 
     @Test

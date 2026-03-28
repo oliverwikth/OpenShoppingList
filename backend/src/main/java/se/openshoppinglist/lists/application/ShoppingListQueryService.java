@@ -77,7 +77,13 @@ public class ShoppingListQueryService {
                 shoppingList.getCreatedAt(),
                 shoppingList.getUpdatedAt(),
                 shoppingList.getLastModifiedByDisplayName(),
-                shoppingList.getItems().stream().map(this::toItemView).toList(),
+                shoppingList.getItems().stream()
+                        .sorted(Comparator
+                                .comparing(ShoppingListItem::getCreatedAt)
+                                .thenComparingInt(ShoppingListItem::getPosition)
+                                .thenComparing(ShoppingListItem::getId))
+                        .map(this::toItemView)
+                        .toList(),
                 activities
         );
     }

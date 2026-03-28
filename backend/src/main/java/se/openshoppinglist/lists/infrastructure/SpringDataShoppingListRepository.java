@@ -19,7 +19,7 @@ interface SpringDataShoppingListRepository extends JpaRepository<ShoppingList, U
     @EntityGraph(attributePaths = "items")
     java.util.Optional<ShoppingList> findById(UUID id);
 
-    @Query("select shoppingList.id from ShoppingList shoppingList order by shoppingList.updatedAt desc")
+    @Query("select shoppingList.id from ShoppingList shoppingList order by shoppingList.createdAt desc, shoppingList.id desc")
     Page<UUID> findPageOfIds(Pageable pageable);
 
     @EntityGraph(attributePaths = "items")

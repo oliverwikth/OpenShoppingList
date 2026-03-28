@@ -120,6 +120,65 @@ describe('ShoppingListDetailPage', () => {
     expect(content.indexOf('Avprickade varor')).toBeLessThan(content.indexOf('Mjolk'))
   })
 
+  it('sorts the varor tab by created time instead of updated time', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          ...initialList,
+          items: [
+            {
+              id: 'item-1',
+              itemType: 'MANUAL',
+              title: 'Nyare vara',
+              checked: false,
+              checkedAt: null,
+              checkedByDisplayName: null,
+              lastModifiedByDisplayName: 'anna',
+              createdAt: '2026-03-26T18:06:00Z',
+              updatedAt: '2026-03-26T18:10:00Z',
+              position: 1,
+              quantity: 1,
+              manualNote: '',
+              externalSnapshot: null,
+            },
+            {
+              id: 'item-2',
+              itemType: 'MANUAL',
+              title: 'Äldre vara',
+              checked: false,
+              checkedAt: null,
+              checkedByDisplayName: null,
+              lastModifiedByDisplayName: 'anna',
+              createdAt: '2026-03-26T18:05:00Z',
+              updatedAt: '2026-03-26T18:09:00Z',
+              position: 2,
+              quantity: 1,
+              manualNote: '',
+              externalSnapshot: null,
+            },
+          ],
+          recentActivities: [],
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+    )
+
+    const { container } = render(
+      <MemoryRouter initialEntries={['/anna/lists/list-1/varor']}>
+        <AppShell />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('Nyare vara')).toBeInTheDocument()
+    expect(screen.getByText('Äldre vara')).toBeInTheDocument()
+
+    const content = container.textContent ?? ''
+    expect(content.indexOf('Äldre vara')).toBeLessThan(content.indexOf('Nyare vara'))
+  })
+
   it('debounces manual search adds after the last change', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch')
     let listFetchCount = 0

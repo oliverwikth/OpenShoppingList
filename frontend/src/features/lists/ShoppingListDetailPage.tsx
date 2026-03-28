@@ -409,7 +409,7 @@ export function ShoppingListDetailPage() {
     }
   }, [deferredSearchInput, currentSearchPage])
 
-  const itemsInOrder = useMemo(() => [...(list?.items ?? [])].sort((left, right) => left.position - right.position), [list?.items])
+  const itemsInOrder = useMemo(() => [...(list?.items ?? [])].sort(compareItemsByCreatedAt), [list?.items])
   const uncheckedChecklistGroups = useMemo(
     () => groupItems((list?.items ?? []).filter((item) => !item.checked)),
     [list?.items],
@@ -1282,10 +1282,25 @@ function claimActionKey(itemId: string) {
 function upsertListItem(items: ShoppingListItem[], updatedItem: ShoppingListItem) {
   const existingItemIndex = items.findIndex((item) => item.id === updatedItem.id)
   if (existingItemIndex === -1) {
-    return [...items, updatedItem].sort((left, right) => left.position - right.position)
+    return [...items, updatedItem]
   }
 
   return items.map((item) => (item.id === updatedItem.id ? updatedItem : item))
+}
+
+function compareItemsByCreatedAt(left: ShoppingListItem, right: ShoppingListItem) {
+  const leftTimestamp = Date.parse(left.createdAt)
+  const rightTimestamp = Date.parse(right.createdAt)
+
+  if (Number.isFinite(leftTimestamp) && Number.isFinite(rightTimestamp) && leftTimestamp !== rightTimestamp) {
+    return leftTimestamp - rightTimestamp
+  }
+
+  if (left.position !== right.position) {
+    return left.position - right.position
+  }
+
+  return left.id.localeCompare(right.id)
 }
 
 function groupItems(items: ShoppingListItem[]): ItemGroup[] {

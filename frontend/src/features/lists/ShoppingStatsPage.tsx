@@ -30,6 +30,7 @@ interface ChartTickModel {
   label: string
   x: number
   xPercent: number
+  align: 'start' | 'center' | 'end'
 }
 
 interface ChartYTickModel {
@@ -170,80 +171,86 @@ export function ShoppingStatsPage() {
                 <section className="stats-hero-chart" aria-label="Kostnad per period">
                   {chart && selectedPoint ? (
                     <div className="stats-chart-panel">
-                      <div
-                        className={`stats-chart-tooltip ${selectedPoint.xPercent > 70 ? 'is-right' : 'is-left'}`}
-                        style={{ left: `${selectedPoint.xPercent}%`, top: `${selectedPoint.yPercent}%` }}
-                      >
-                        <strong>{formatTooltipDate(selectedPoint.point.bucketStart, range)}</strong>
-                        <span>{formatMoney(selectedPoint.point.amount, stats.currency)}</span>
-                        <span>{selectedPoint.point.quantity} varor</span>
-                      </div>
+                      <div className="stats-chart-stage">
+                        <div
+                          className={`stats-chart-tooltip ${selectedPoint.xPercent > 70 ? 'is-right' : 'is-left'}`}
+                          style={{ left: `${selectedPoint.xPercent}%`, top: `${selectedPoint.yPercent}%` }}
+                        >
+                          <strong>{formatTooltipDate(selectedPoint.point.bucketStart, range)}</strong>
+                          <span>{formatMoney(selectedPoint.point.amount, stats.currency)}</span>
+                          <span>{selectedPoint.point.quantity} varor</span>
+                        </div>
 
-                      <svg className="stats-chart" viewBox={`0 0 ${chart.width} ${chart.height}`} preserveAspectRatio="none" role="img">
-                        <defs>
-                          <linearGradient id="stats-area-fill" x1="0%" x2="0%" y1="0%" y2="100%">
-                            <stop offset="0%" stopColor="rgba(82, 201, 166, 0.30)" />
-                            <stop offset="100%" stopColor="rgba(82, 201, 166, 0.02)" />
-                          </linearGradient>
-                        </defs>
+                        <svg className="stats-chart" viewBox={`0 0 ${chart.width} ${chart.height}`} preserveAspectRatio="none" role="img">
+                          <defs>
+                            <linearGradient id="stats-area-fill" x1="0%" x2="0%" y1="0%" y2="100%">
+                              <stop offset="0%" stopColor="rgba(63, 140, 255, 0.22)" />
+                              <stop offset="100%" stopColor="rgba(63, 140, 255, 0.03)" />
+                            </linearGradient>
+                          </defs>
 
-                        {chart.xTicks.map((tick) => (
+                          {chart.xTicks.map((tick) => (
+                            <line
+                              className="stats-chart__vertical-grid"
+                              key={tick.key}
+                              x1={tick.x}
+                              x2={tick.x}
+                              y1={16}
+                              y2={chart.baselineY}
+                            />
+                          ))}
+
+                          {chart.yTicks.map((tick) => (
+                            <g key={tick.key}>
+                              <line
+                                className="stats-chart__grid"
+                                x1={16}
+                                x2={chart.width - 54}
+                                y1={tick.y}
+                                y2={tick.y}
+                              />
+                              <text className="stats-chart__ylabel" x={chart.width - 4} y={tick.y + 4}>
+                                {tick.label}
+                              </text>
+                            </g>
+                          ))}
+
+                          <path className="stats-chart__area" d={chart.areaPath} fill="url(#stats-area-fill)" />
+                          <path className="stats-chart__line" d={chart.linePath} />
+
                           <line
-                            className="stats-chart__vertical-grid"
-                            key={tick.key}
-                            x1={tick.x}
-                            x2={tick.x}
+                            className="stats-chart__guide"
+                            x1={selectedPoint.x}
+                            x2={selectedPoint.x}
                             y1={16}
                             y2={chart.baselineY}
                           />
-                        ))}
+                        </svg>
 
-                        {chart.yTicks.map((tick) => (
-                          <g key={tick.key}>
-                            <line
-                              className="stats-chart__grid"
-                              x1={16}
-                              x2={chart.width - 54}
-                              y1={tick.y}
-                              y2={tick.y}
-                            />
-                            <text className="stats-chart__ylabel" x={chart.width - 4} y={tick.y + 4}>
-                              {tick.label}
-                            </text>
-                          </g>
-                        ))}
-
-                        <path className="stats-chart__area" d={chart.areaPath} fill="url(#stats-area-fill)" />
-                        <path className="stats-chart__line" d={chart.linePath} />
-
-                        <line
-                          className="stats-chart__guide"
-                          x1={selectedPoint.x}
-                          x2={selectedPoint.x}
-                          y1={16}
-                          y2={chart.baselineY}
-                        />
-                      </svg>
-
-                      <div className="stats-chart__markers">
-                        {chart.plottedPoints.map((point) => (
-                          <button
-                            aria-label={`Visa ${formatTooltipDate(point.point.bucketStart, range)}: ${formatMoney(point.point.amount, stats.currency)}`}
-                            className={`stats-chart__hotspot ${selectedPoint.index === point.index ? 'is-active' : ''}`}
-                            key={point.index}
-                            onClick={() => setSelectedPointIndex(point.index)}
-                            onPointerDown={() => setSelectedPointIndex(point.index)}
-                            style={{ left: `${point.xPercent}%`, top: `${point.yPercent}%` }}
-                            type="button"
-                          >
-                            <span className="stats-chart__hotspot-core" />
-                          </button>
-                        ))}
+                        <div className="stats-chart__markers">
+                          {chart.plottedPoints.map((point) => (
+                            <button
+                              aria-label={`Visa ${formatTooltipDate(point.point.bucketStart, range)}: ${formatMoney(point.point.amount, stats.currency)}`}
+                              className={`stats-chart__hotspot ${selectedPoint.index === point.index ? 'is-active' : ''}`}
+                              key={point.index}
+                              onClick={() => setSelectedPointIndex(point.index)}
+                              onPointerDown={() => setSelectedPointIndex(point.index)}
+                              style={{ left: `${point.xPercent}%`, top: `${point.yPercent}%` }}
+                              type="button"
+                            >
+                              <span className="stats-chart__hotspot-core" />
+                            </button>
+                          ))}
+                        </div>
                       </div>
 
                       <div className="stats-chart__footer">
                         {chart.xTicks.map((tick) => (
-                          <span key={tick.key} style={{ left: `${tick.xPercent}%` }}>
+                          <span
+                            className={`stats-chart__footer-label stats-chart__footer-label--${tick.align}`}
+                            key={tick.key}
+                            style={{ left: `${tick.xPercent}%` }}
+                          >
                             {tick.label}
                           </span>
                         ))}
@@ -523,15 +530,21 @@ function buildStatsChart(points: ShoppingStats['spendSeries'], range: StatsRange
   })
 
   const tickSource = plottedPoints.length > 0 ? plottedPoints : pointCoordinates
-  const xTicks = buildTickIndices(tickSource.length, Math.min(tickSource.length, 4)).map((index) => {
-    const point = tickSource[index]
-    return {
-      key: `${point?.point.bucketStart ?? index}`,
-      label: formatAxisDate(point?.point.bucketStart ?? new Date().toISOString(), range),
-      x: point?.x ?? paddingLeft,
-      xPercent: point?.xPercent ?? 0,
-    }
-  })
+  const xTicks = filterOverlappingTicks(
+    buildTickIndices(tickSource.length, Math.min(tickSource.length, 4)).map((index) => {
+      const point = tickSource[index]
+      return {
+        key: `${point?.point.bucketStart ?? index}`,
+        label: formatAxisDate(point?.point.bucketStart ?? new Date().toISOString(), range),
+        x: point?.x ?? paddingLeft,
+        xPercent: point?.xPercent ?? 0,
+        align: 'center' as const,
+      }
+    }),
+  ).map((tick, index, ticks) => ({
+    ...tick,
+    align: resolveTickAlignment(index, ticks.length),
+  }))
 
   return {
     width,
@@ -564,4 +577,49 @@ function buildTickIndices(length: number, desiredTicks: number) {
   }
 
   return [...indices].sort((left, right) => left - right)
+}
+
+function filterOverlappingTicks(ticks: ChartTickModel[]) {
+  if (ticks.length <= 2) {
+    return ticks
+  }
+
+  const minSpacing = 74
+  const filtered: ChartTickModel[] = [ticks[0]]
+
+  for (let index = 1; index < ticks.length - 1; index += 1) {
+    const tick = ticks[index]
+    const previousTick = filtered.at(-1)
+    const nextTick = ticks[index + 1]
+
+    if (!previousTick) {
+      filtered.push(tick)
+      continue
+    }
+
+    if (tick.x - previousTick.x < minSpacing) {
+      continue
+    }
+
+    if (nextTick && nextTick.x - tick.x < minSpacing / 1.5) {
+      continue
+    }
+
+    filtered.push(tick)
+  }
+
+  filtered.push(ticks.at(-1)!)
+  return filtered
+}
+
+function resolveTickAlignment(index: number, length: number): 'start' | 'center' | 'end' {
+  if (index === 0) {
+    return 'start'
+  }
+
+  if (index === length - 1) {
+    return 'end'
+  }
+
+  return 'center'
 }
