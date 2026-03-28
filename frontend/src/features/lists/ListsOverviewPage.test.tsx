@@ -333,7 +333,7 @@ describe('ListsOverviewPage', () => {
     expect(screen.getByRole('tab', { name: 'i år' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: '1 år' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'All time' })).toBeInTheDocument()
-    expect(screen.getByText('Tryck på grafen för värden')).toBeInTheDocument()
+    expect(screen.getByText('Tryck på punkterna för datum och värden')).toBeInTheDocument()
 
     const monthLinePath = container.querySelector('.stats-chart__line')?.getAttribute('d')
     expect(monthLinePath).toContain('M 16.00 18.00')
@@ -345,6 +345,10 @@ describe('ListsOverviewPage', () => {
     expect(screen.getByRole('button', { name: /Visa 1 mars 2026: 800/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Visa 15 mars 2026: 200/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Visa 28 mars 2026: 499/ })).toBeInTheDocument()
+    expect(screen.getByText('1 mars')).toBeInTheDocument()
+    expect(screen.getByText('15 mars')).toBeInTheDocument()
+    expect(screen.getByText('28 mars')).toBeInTheDocument()
+    expect(screen.queryByText('8 mars')).not.toBeInTheDocument()
     expect(container.querySelector('.stats-chart-tooltip')?.textContent).toContain('499')
     expect(container.querySelector('.stats-chart-tooltip')?.textContent).toContain('9 varor')
 

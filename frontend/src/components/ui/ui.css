@@ -659,12 +659,23 @@
 .lists-page-size__chevron {
   position: absolute;
   top: 50%;
-  right: 16px;
-  color: var(--text);
-  font-size: 1rem;
-  line-height: 1;
+  right: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
   pointer-events: none;
   transform: translateY(-50%);
+}
+
+.lists-page-size__chevron::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid var(--text);
+  border-bottom: 2px solid var(--text);
+  transform: translateY(-1px) rotate(45deg);
 }
 
 .lists-pagination__status {

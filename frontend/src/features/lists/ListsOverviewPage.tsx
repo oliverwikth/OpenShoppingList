@@ -198,9 +198,7 @@ export function ListsOverviewPage() {
                     </option>
                   ))}
                 </select>
-                <span aria-hidden="true" className="lists-page-size__chevron">
-                  ⌄
-                </span>
+                <span aria-hidden="true" className="lists-page-size__chevron" />
               </span>
             </label>
           </div>

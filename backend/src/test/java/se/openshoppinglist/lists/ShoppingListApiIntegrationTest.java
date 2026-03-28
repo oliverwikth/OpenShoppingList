@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.time.LocalDate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -357,6 +358,26 @@ class ShoppingListApiIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void keepsThePreviousShoppingDateAsTheFirstPointInMonthSeries() throws Exception {
+        LocalDate today = LocalDate.now(java.time.ZoneOffset.UTC);
+        LocalDate monthStart = today.minusMonths(1);
+        LocalDate anchorDate = monthStart.minusDays(1);
+        LocalDate inWindowDate = today.minusDays(2);
+
+        importWillysList("Månadens sista februari", anchorDate, 10.0, "100-anchor_ST");
+        importWillysList("Månadens aktuella lista", inWindowDate, 20.0, "100-current_ST");
+
+        mockMvc.perform(get("/api/lists/stats")
+                        .param("range", "month"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.range").value("month"))
+                .andExpect(jsonPath("$.spentAmount").value(20.0))
+                .andExpect(jsonPath("$.spendSeries[0].bucketStart", startsWith(anchorDate.toString() + "T")))
+                .andExpect(jsonPath("$.spendSeries[0].amount").value(10.0))
+                .andExpect(jsonPath("$.spendSeries[0].quantity").value(1));
+    }
+
+    @Test
     void importsAWillysListPayloadIntoANewShoppingList() throws Exception {
         mockMvc.perform(post("/api/lists/imports/willys")
                         .header(ActorDisplayName.HEADER_NAME, "anna")
@@ -559,5 +580,34 @@ class ShoppingListApiIntegrationTest extends PostgresIntegrationTest {
     private String readId(MvcResult result) throws Exception {
         JsonNode json = objectMapper.readTree(result.getResponse().getContentAsString());
         return json.path("id").asText();
+    }
+
+    private void importWillysList(String name, LocalDate modifiedTime, double priceValue, String productCode) throws Exception {
+        mockMvc.perform(post("/api/lists/imports/willys")
+                        .header(ActorDisplayName.HEADER_NAME, "anna")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name":"%s",
+                                  "modifiedTime":"%s",
+                                  "entries":[
+                                    {
+                                      "quantity":1,
+                                      "pickUnit":"pieces",
+                                      "categoryName":"Test",
+                                      "entryType":"PRODUCT",
+                                      "checked":true,
+                                      "product":{
+                                        "name":"Testvara",
+                                        "code":"%s",
+                                        "productLine2":"TEST, 1st",
+                                        "priceValue":%s,
+                                        "image":{"url":"https://example.com/test.jpg"}
+                                      }
+                                    }
+                                  ]
+                                }
+                                """.formatted(name, modifiedTime, productCode, priceValue)))
+                .andExpect(status().isOk());
     }
 }

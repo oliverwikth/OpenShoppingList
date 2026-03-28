@@ -76,7 +76,7 @@ public class ShoppingStatsQueryService {
                 previousWindow == null ? null : previousTotals.activeListCount(),
                 currentTotals.averagePricedItemAmount(),
                 previousWindow == null ? null : previousTotals.averagePricedItemAmount(),
-                buildSeries(range, currentWindow, currentItems, zoneId),
+                buildSeries(range, currentWindow, checkedItems, zoneId),
                 topItemsFor(currentItems)
         );
     }
@@ -130,7 +130,8 @@ public class ShoppingStatsQueryService {
             List<CheckedItemSnapshot> items,
             ZoneId zoneId
     ) {
-        List<Bucket> buckets = range.buckets(window, zoneId);
+        Window seriesWindow = range.seriesWindow(window, items, zoneId);
+        List<Bucket> buckets = range.buckets(seriesWindow, zoneId);
         BigDecimal cumulativeAmount = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
         List<ShoppingListViews.ShoppingStatsPointView> series = new ArrayList<>();
 
@@ -255,6 +256,20 @@ public class ShoppingStatsQueryService {
                         currentStart.atStartOfDay(zoneId).toInstant(),
                         "föregående månaden"
                 );
+            }
+
+            @Override
+            Window seriesWindow(Window currentWindow, List<CheckedItemSnapshot> checkedItems, ZoneId zoneId) {
+                return checkedItems.stream()
+                        .map(CheckedItemSnapshot::checkedAt)
+                        .filter(checkedAt -> checkedAt.isBefore(currentWindow.start()))
+                        .max(Comparator.naturalOrder())
+                        .map(checkedAt -> new Window(
+                                LocalDate.ofInstant(checkedAt, zoneId).atStartOfDay(zoneId).toInstant(),
+                                currentWindow.end(),
+                                currentWindow.label()
+                        ))
+                        .orElse(currentWindow);
             }
 
             @Override
@@ -394,6 +409,10 @@ public class ShoppingStatsQueryService {
         abstract Window currentWindow(Instant now, ZoneId zoneId, List<CheckedItemSnapshot> checkedItems);
 
         abstract Window previousWindow(Window currentWindow, ZoneId zoneId);
+
+        Window seriesWindow(Window currentWindow, List<CheckedItemSnapshot> checkedItems, ZoneId zoneId) {
+            return currentWindow;
+        }
 
         abstract List<Bucket> buckets(Window window, ZoneId zoneId);
 

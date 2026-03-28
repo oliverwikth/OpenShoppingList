@@ -163,7 +163,7 @@ export function ShoppingStatsPage() {
                       <span className="stats-market-legend__dot" />
                       Listkostnad
                     </span>
-                    <span className="stats-market-legend__hint">Tryck på grafen för värden</span>
+                    <span className="stats-market-legend__hint">Tryck på punkterna för datum och värden</span>
                   </div>
                 </div>
 
@@ -522,12 +522,16 @@ function buildStatsChart(points: ShoppingStats['spendSeries'], range: StatsRange
     }
   })
 
-  const xTicks = buildTickIndices(points.length, Math.min(points.length, 4)).map((index) => ({
-    key: `${points[index]?.bucketStart ?? index}`,
-    label: formatAxisDate(points[index]?.bucketStart ?? new Date().toISOString(), range),
-    x: pointCoordinates[index]?.x ?? paddingLeft,
-    xPercent: pointCoordinates[index]?.xPercent ?? 0,
-  }))
+  const tickSource = plottedPoints.length > 0 ? plottedPoints : pointCoordinates
+  const xTicks = buildTickIndices(tickSource.length, Math.min(tickSource.length, 4)).map((index) => {
+    const point = tickSource[index]
+    return {
+      key: `${point?.point.bucketStart ?? index}`,
+      label: formatAxisDate(point?.point.bucketStart ?? new Date().toISOString(), range),
+      x: point?.x ?? paddingLeft,
+      xPercent: point?.xPercent ?? 0,
+    }
+  })
 
   return {
     width,
