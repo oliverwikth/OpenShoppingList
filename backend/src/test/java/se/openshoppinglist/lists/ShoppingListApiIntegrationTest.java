@@ -1,18 +1,21 @@
 package se.openshoppinglist.lists;
 
+import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import se.openshoppinglist.actor.ActorDisplayName;
@@ -27,6 +30,16 @@ class ShoppingListApiIntegrationTest extends PostgresIntegrationTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    @BeforeEach
+    void resetDatabase() {
+        jdbcTemplate.execute("delete from item_activity_log");
+        jdbcTemplate.execute("delete from shopping_list_item");
+        jdbcTemplate.execute("delete from shopping_list");
+    }
 
     @Test
     void createsListAddsManualItemAndChecksIt() throws Exception {
@@ -292,6 +305,131 @@ class ShoppingListApiIntegrationTest extends PostgresIntegrationTest {
                 .andExpect(jsonPath("$.topItems[0].title").value("Tacobröd"))
                 .andExpect(jsonPath("$.topItems[0].quantity").value(2))
                 .andExpect(jsonPath("$.topItems[0].imageUrl").value("https://example.com/taco.jpg"));
+    }
+
+    @Test
+    void importsAWillysListPayloadIntoANewShoppingList() throws Exception {
+        mockMvc.perform(post("/api/lists/imports/willys")
+                        .header(ActorDisplayName.HEADER_NAME, "anna")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name":"Importerad Willys-lista",
+                                  "modifiedTime":"2026-03-27",
+                                  "entries":[
+                                    {
+                                      "quantity":2,
+                                      "pickUnit":"pieces",
+                                      "categoryName":"Dryck",
+                                      "entryType":"PRODUCT",
+                                      "checked":true,
+                                      "product":{
+                                        "name":"Festivita Extra Mörkrost Bryggkaffe",
+                                        "code":"100467219_ST",
+                                        "productLine2":"ARVIDNORDQUIST, 500g",
+                                        "priceValue":87.5,
+                                        "image":{"url":"https://assets.axfood.se/image/upload/f_auto,t_200/07310760012308_C1R1_s01"}
+                                      }
+                                    },
+                                    {
+                                      "quantity":1,
+                                      "entryType":"FREETEXT",
+                                      "freeTextProduct":"Bröd",
+                                      "checked":false
+                                    },
+                                    {
+                                      "quantity":0.3,
+                                      "pickUnit":"kilogram",
+                                      "categoryName":"Frukt & Grönt",
+                                      "entryType":"PRODUCT",
+                                      "checked":false,
+                                      "product":{
+                                        "name":"Potatis Fast Klass 1",
+                                        "code":"100150587_KG",
+                                        "productLine2":"Sverige",
+                                        "priceValue":12.9,
+                                        "image":{"url":"https://assets.axfood.se/image/upload/f_auto,t_200/02359739200006_C1C0_s01"}
+                                      }
+                                    }
+                                  ]
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Importerad Willys-lista"))
+                .andExpect(jsonPath("$.updatedAt", startsWith("2026-03-27T")))
+                .andExpect(jsonPath("$.lastModifiedByDisplayName").value("anna"))
+                .andExpect(jsonPath("$.items[0].title").value("Festivita Extra Mörkrost Bryggkaffe"))
+                .andExpect(jsonPath("$.items[0].quantity").value(2))
+                .andExpect(jsonPath("$.items[0].checked").value(true))
+                .andExpect(jsonPath("$.items[0].checkedAt", startsWith("2026-03-27T")))
+                .andExpect(jsonPath("$.items[0].externalSnapshot.provider").value("willys"))
+                .andExpect(jsonPath("$.items[0].externalSnapshot.articleId").value("100467219_ST"))
+                .andExpect(jsonPath("$.items[0].externalSnapshot.category").value("Dryck"))
+                .andExpect(jsonPath("$.items[0].externalSnapshot.imageUrl").value("https://assets.axfood.se/image/upload/f_auto,t_200/07310760012308_C1R1_s01"))
+                .andExpect(jsonPath("$.items[1].title").value("Bröd"))
+                .andExpect(jsonPath("$.items[1].quantity").value(1))
+                .andExpect(jsonPath("$.items[1].checked").value(false))
+                .andExpect(jsonPath("$.items[1].externalSnapshot").doesNotExist())
+                .andExpect(jsonPath("$.items[2].title").value("Potatis Fast Klass 1"))
+                .andExpect(jsonPath("$.items[2].quantity").value(1))
+                .andExpect(jsonPath("$.items[2].checked").value(false))
+                .andExpect(jsonPath("$.items[2].manualNote").value("Importerad mängd: 0.3 kilogram • Sverige"))
+                .andExpect(jsonPath("$.items[2].externalSnapshot").doesNotExist())
+                .andExpect(jsonPath("$.recentActivities[0].occurredAt", startsWith("2026-03-27T")));
+    }
+
+    @Test
+    void importsABatchOfWillysListsFromAnArrayBody() throws Exception {
+        mockMvc.perform(post("/api/lists/imports/willys")
+                        .header(ActorDisplayName.HEADER_NAME, "anna")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                [
+                                  {
+                                    "name":"Willys batch 1",
+                                    "modifiedTime":"2026-03-25",
+                                    "entries":[
+                                      {
+                                        "quantity":1,
+                                        "entryType":"FREETEXT",
+                                        "freeTextProduct":"Bröd",
+                                        "checked":false
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "name":"Willys batch 2",
+                                    "modifiedTime":"2026-03-26",
+                                    "entries":[
+                                      {
+                                        "quantity":1,
+                                        "pickUnit":"pieces",
+                                        "categoryName":"Dryck",
+                                        "entryType":"PRODUCT",
+                                        "checked":true,
+                                        "product":{
+                                          "name":"Festivita Extra Mörkrost Bryggkaffe",
+                                          "code":"100467219_ST",
+                                          "productLine2":"ARVIDNORDQUIST, 500g",
+                                          "priceValue":87.5,
+                                          "image":{"url":"https://assets.axfood.se/image/upload/f_auto,t_200/07310760012308_C1R1_s01"}
+                                        }
+                                      }
+                                    ]
+                                  }
+                                ]
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].name").value("Willys batch 1"))
+                .andExpect(jsonPath("$[0].updatedAt", startsWith("2026-03-25T")))
+                .andExpect(jsonPath("$[0].items[0].title").value("Bröd"))
+                .andExpect(jsonPath("$[0].items[0].checked").value(false))
+                .andExpect(jsonPath("$[1].name").value("Willys batch 2"))
+                .andExpect(jsonPath("$[1].updatedAt", startsWith("2026-03-26T")))
+                .andExpect(jsonPath("$[1].items[0].title").value("Festivita Extra Mörkrost Bryggkaffe"))
+                .andExpect(jsonPath("$[1].items[0].checked").value(true))
+                .andExpect(jsonPath("$[1].items[0].checkedAt", startsWith("2026-03-26T")))
+                .andExpect(jsonPath("$[1].items[0].externalSnapshot.articleId").value("100467219_ST"));
     }
 
     @Test

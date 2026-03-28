@@ -1,10 +1,13 @@
 package se.openshoppinglist.lists.api;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.validation.annotation.Validated;
@@ -21,6 +24,7 @@ import se.openshoppinglist.lists.application.ShoppingListCommandService;
 import se.openshoppinglist.lists.application.ShoppingListQueryService;
 import se.openshoppinglist.lists.application.ShoppingStatsQueryService;
 import se.openshoppinglist.lists.application.ShoppingListViews;
+import se.openshoppinglist.lists.application.WillysListImportService;
 import se.openshoppinglist.lists.domain.ExternalArticleSnapshot;
 
 @RestController
@@ -31,18 +35,24 @@ public class ShoppingListController {
     private final ShoppingListCommandService shoppingListCommandService;
     private final ShoppingListQueryService shoppingListQueryService;
     private final ShoppingStatsQueryService shoppingStatsQueryService;
+    private final WillysListImportService willysListImportService;
     private final ActorContextResolver actorContextResolver;
+    private final ObjectMapper objectMapper;
 
     public ShoppingListController(
             ShoppingListCommandService shoppingListCommandService,
             ShoppingListQueryService shoppingListQueryService,
             ShoppingStatsQueryService shoppingStatsQueryService,
-            ActorContextResolver actorContextResolver
+            WillysListImportService willysListImportService,
+            ActorContextResolver actorContextResolver,
+            ObjectMapper objectMapper
     ) {
         this.shoppingListCommandService = shoppingListCommandService;
         this.shoppingListQueryService = shoppingListQueryService;
         this.shoppingStatsQueryService = shoppingStatsQueryService;
+        this.willysListImportService = willysListImportService;
         this.actorContextResolver = actorContextResolver;
+        this.objectMapper = objectMapper;
     }
 
     @GetMapping
@@ -69,6 +79,67 @@ public class ShoppingListController {
     @GetMapping("/stats")
     ShoppingListViews.ShoppingStatsView getStats(@RequestParam(defaultValue = "month") String range) {
         return shoppingStatsQueryService.getStats(range);
+    }
+
+    @PostMapping("/imports/willys")
+    Object importWillysList(
+            @RequestBody JsonNode requestBody,
+            HttpServletRequest httpServletRequest
+    ) {
+        if (requestBody == null || requestBody.isNull()) {
+            throw new IllegalArgumentException("Willys import body must not be empty.");
+        }
+
+        if (requestBody.isArray()) {
+            return streamOf(requestBody.elements())
+                    .map(node -> objectMapper.convertValue(node, ImportWillysListRequest.class))
+                    .map(this::toImportCommand)
+                    .map(command -> willysListImportService.importList(command, actorContextResolver.resolve(httpServletRequest)))
+                    .map(importedList -> shoppingListQueryService.getList(importedList.getId()))
+                    .toList();
+        }
+
+        if (requestBody.isObject()) {
+            return shoppingListQueryService.getList(willysListImportService.importList(
+                    toImportCommand(objectMapper.convertValue(requestBody, ImportWillysListRequest.class)),
+                    actorContextResolver.resolve(httpServletRequest)
+            ).getId());
+        }
+
+        throw new IllegalArgumentException("Willys import body must be either an object or an array of objects.");
+    }
+
+    private WillysListImportService.ImportWillysListCommand toImportCommand(ImportWillysListRequest request) {
+        return new WillysListImportService.ImportWillysListCommand(
+                request.name(),
+                request.modifiedTime(),
+                request.entries() == null
+                        ? List.of()
+                        : request.entries().stream()
+                        .map(entry -> new WillysListImportService.ImportWillysListEntryCommand(
+                                entry.quantity(),
+                                entry.pickUnit(),
+                                entry.categoryName(),
+                                entry.entryType(),
+                                entry.freeTextProduct(),
+                                entry.checked(),
+                                entry.product() == null
+                                        ? null
+                                        : new WillysListImportService.ImportWillysProductCommand(
+                                                entry.product().code(),
+                                                entry.product().name(),
+                                                entry.product().productLine2(),
+                                                entry.product().priceValue(),
+                                                entry.product().image() == null ? null : entry.product().image().url()
+                                        )
+                        ))
+                        .toList()
+        );
+    }
+
+    private <T> java.util.stream.Stream<T> streamOf(java.util.Iterator<T> iterator) {
+        Iterable<T> iterable = () -> iterator;
+        return java.util.stream.StreamSupport.stream(iterable.spliterator(), false);
     }
 
     @PatchMapping("/{listId}")
@@ -237,5 +308,31 @@ public class ShoppingListController {
     }
 
     public record AdjustItemQuantityRequest(Integer delta) {
+    }
+
+    public record ImportWillysListRequest(String name, LocalDate modifiedTime, List<ImportWillysEntryRequest> entries) {
+    }
+
+    public record ImportWillysEntryRequest(
+            java.math.BigDecimal quantity,
+            String pickUnit,
+            String categoryName,
+            String entryType,
+            String freeTextProduct,
+            boolean checked,
+            ImportWillysProductRequest product
+    ) {
+    }
+
+    public record ImportWillysProductRequest(
+            String code,
+            String name,
+            String productLine2,
+            java.math.BigDecimal priceValue,
+            ImportWillysImageRequest image
+    ) {
+    }
+
+    public record ImportWillysImageRequest(String url) {
     }
 }
