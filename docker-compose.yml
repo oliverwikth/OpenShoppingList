@@ -18,6 +18,8 @@ services:
   backend:
     build:
       context: ./backend
+    ports:
+      - "8082:8080"
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/open_shopping_list
       DB_USERNAME: shopping
