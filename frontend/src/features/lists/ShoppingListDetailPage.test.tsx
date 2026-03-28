@@ -120,7 +120,7 @@ describe('ShoppingListDetailPage', () => {
     expect(content.indexOf('Avprickade varor')).toBeLessThan(content.indexOf('Mjolk'))
   })
 
-  it('buffers manual search adds until the search is cleared', async () => {
+  it('debounces manual search adds after the last change', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch')
     let listFetchCount = 0
 
@@ -196,9 +196,8 @@ describe('ShoppingListDetailPage', () => {
     expect(screen.getByRole('group', { name: 'Antal för Födelsedagsljus' })).toHaveTextContent('3')
     expect(fetchMock.mock.calls.filter(([url]) => url === '/api/lists/list-1/items/manual')).toHaveLength(0)
 
-    await userEvent.click(screen.getByRole('button', { name: 'Rensa sökning' }))
-
-    await waitFor(() => {
+    await waitFor(
+      () => {
       const manualPosts = fetchMock.mock.calls.filter(([url]) => url === '/api/lists/list-1/items/manual')
       expect(manualPosts).toHaveLength(1)
       expect(manualPosts[0][1]).toEqual(
@@ -214,10 +213,12 @@ describe('ShoppingListDetailPage', () => {
           method: 'POST',
         }),
       )
-    })
+      },
+      { timeout: 1_500 },
+    )
   })
 
-  it('buffers repeated retailer result adds and flushes them as one request', async () => {
+  it('debounces repeated retailer result adds into one request', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch')
     let listFetchCount = 0
 
@@ -323,9 +324,8 @@ describe('ShoppingListDetailPage', () => {
     expect(screen.getByRole('group', { name: 'Antal för Kaffe 1' })).toHaveTextContent('5')
     expect(fetchMock.mock.calls.filter(([url]) => url === '/api/lists/list-1/items/external')).toHaveLength(0)
 
-    await userEvent.click(screen.getByRole('button', { name: 'Rensa sökning' }))
-
-    await waitFor(() => {
+    await waitFor(
+      () => {
       const externalPosts = fetchMock.mock.calls.filter(([url]) => url === '/api/lists/list-1/items/external')
       expect(externalPosts).toHaveLength(1)
       expect(externalPosts[0][1]).toEqual(
@@ -348,10 +348,12 @@ describe('ShoppingListDetailPage', () => {
           method: 'POST',
         }),
       )
-    })
+      },
+      { timeout: 1_500 },
+    )
   })
 
-  it('flushes multiple different retailer items from the same search', async () => {
+  it('debounces multiple different retailer items from the same search', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch')
     let listFetchCount = 0
 
@@ -490,13 +492,143 @@ describe('ShoppingListDetailPage', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Lägg till Taco Bröd' }))
     await userEvent.click(await screen.findByRole('button', { name: 'Lägg till Taco Färs' }))
 
-    await userEvent.click(screen.getByRole('button', { name: 'Rensa sökning' }))
-
-    await waitFor(() => {
+    await waitFor(
+      () => {
       const externalPosts = fetchMock.mock.calls.filter(([url]) => url === '/api/lists/list-1/items/external')
       expect(externalPosts).toHaveLength(2)
       expect(externalPosts.map(([, init]) => JSON.parse(String(init?.body)).articleId)).toEqual(['taco-1', 'taco-2'])
+      },
+      { timeout: 1_500 },
+    )
+  })
+
+  it('batches repeated retailer search taps for an existing item into one quantity-adjust request', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+
+    fetchMock.mockImplementation(async (input, init) => {
+      const url = String(input)
+
+      if (url === '/api/lists/list-1' && (!init?.method || init.method === 'GET')) {
+        return new Response(
+          JSON.stringify({
+            ...initialList,
+            items: [
+              {
+                id: 'item-1',
+                itemType: 'EXTERNAL_ARTICLE',
+                title: 'Kaffe 1',
+                checked: false,
+                checkedAt: null,
+                checkedByDisplayName: null,
+                lastModifiedByDisplayName: 'anna',
+                createdAt: '2026-03-26T18:05:00Z',
+                updatedAt: '2026-03-26T18:05:00Z',
+                position: 1,
+                quantity: 2,
+                manualNote: '',
+                externalSnapshot: {
+                  provider: 'willys',
+                  articleId: '1',
+                  subtitle: '500g',
+                  imageUrl: null,
+                  category: 'Dryck',
+                  priceAmount: 39.9,
+                  currency: 'SEK',
+                },
+              },
+            ],
+            recentActivities: [],
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        )
+      }
+
+      if (url.startsWith('/api/retailer-search?q=kaffe&page=0')) {
+        return new Response(
+          JSON.stringify(createSearchResponse('kaffe', [createRetailerResult('1', 'Kaffe 1')], { totalPages: 1, totalResults: 1 })),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        )
+      }
+
+      if (url === '/api/lists/list-1/items/item-1/quantity-adjust') {
+        const body = JSON.parse(String(init?.body))
+        return new Response(
+          JSON.stringify({
+            itemId: 'item-1',
+            removed: false,
+            item: {
+              id: 'item-1',
+              itemType: 'EXTERNAL_ARTICLE',
+              title: 'Kaffe 1',
+              checked: false,
+              checkedAt: null,
+              checkedByDisplayName: null,
+              lastModifiedByDisplayName: 'anna',
+              createdAt: '2026-03-26T18:05:00Z',
+              updatedAt: '2026-03-26T18:06:00Z',
+              position: 1,
+              quantity: 2 + body.delta,
+              manualNote: '',
+              externalSnapshot: {
+                provider: 'willys',
+                articleId: '1',
+                subtitle: '500g',
+                imageUrl: null,
+                category: 'Dryck',
+                priceAmount: 39.9,
+                currency: 'SEK',
+              },
+            },
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        )
+      }
+
+      throw new Error(`Unexpected fetch: ${url}`)
     })
+
+    render(
+      <MemoryRouter initialEntries={['/anna/lists/list-1/varor/search']}>
+        <AppShell />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('Veckohandling')).toBeInTheDocument()
+
+    await userEvent.type(screen.getByLabelText('Sök artikel'), 'kaffe')
+    await userEvent.click(await screen.findByRole('button', { name: 'Öka Kaffe 1' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Öka Kaffe 1' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Öka Kaffe 1' }))
+
+    expect(screen.getByRole('group', { name: 'Antal för Kaffe 1' })).toHaveTextContent('5')
+    expect(fetchMock.mock.calls.filter(([url]) => url === '/api/lists/list-1/items/external')).toHaveLength(0)
+
+    await waitFor(
+      () => {
+        expect(fetchMock).toHaveBeenCalledWith(
+          '/api/lists/list-1/items/item-1/quantity-adjust',
+          expect.objectContaining({
+            method: 'POST',
+            body: JSON.stringify({
+              delta: 3,
+            }),
+            headers: expect.objectContaining({
+              'X-Actor-Display-Name': 'anna',
+            }),
+          }),
+        )
+      },
+      { timeout: 1_500 },
+    )
   })
 
   it('uses varor as the back target from the search view', async () => {

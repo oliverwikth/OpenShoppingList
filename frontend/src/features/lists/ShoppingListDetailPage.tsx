@@ -2,7 +2,7 @@ import { useDeferredValue, useEffect, useEffectEvent, useLayoutEffect, useMemo, 
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useActorName } from '../actor/useActorName'
-import { addExternalItem, addManualItem, adjustItemQuantity, checkItem, decrementItem, fetchList, toggleItemClaim, uncheckItem } from './api'
+import { addExternalItem, addManualItem, adjustItemQuantity, checkItem, fetchList, toggleItemClaim, uncheckItem } from './api'
 import { openListRealtimeSocket, shouldUseRealtimeSocket } from './realtime'
 import { searchRetailer } from '../retailer-search/api'
 import type {
@@ -42,6 +42,7 @@ type PendingSearchAdd = PendingManualSearchAdd | PendingExternalSearchAdd
 
 const ROOT_VIEW_ORDER: Exclude<ViewMode, 'search'>[] = ['items', 'checklist']
 const VAROR_ADJUSTMENT_DEBOUNCE_MS = 600
+const SEARCH_ADD_DEBOUNCE_MS = 600
 
 export function ShoppingListDetailPage() {
   const actorName = useActorName()
@@ -55,12 +56,14 @@ export function ShoppingListDetailPage() {
   const [searchResultsState, setSearchResultsState] = useState<SearchResultsState>({ query: '', pages: {} })
   const [isLoading, setIsLoading] = useState(true)
   const [isSearching, setIsSearching] = useState(false)
-  const [isFlushingSearchAdds, setIsFlushingSearchAdds] = useState(false)
   const [pendingSearchAdds, setPendingSearchAdds] = useState<Record<string, PendingSearchAdd>>({})
+  const [busySearchActionKeys, setBusySearchActionKeys] = useState<Record<string, boolean>>({})
   const [pendingActionKey, setPendingActionKey] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
   const pendingSearchAddsRef = useRef<Record<string, PendingSearchAdd>>({})
+  const inFlightSearchAddsRef = useRef<Record<string, number>>({})
+  const searchAddTimeoutsRef = useRef<Record<string, number>>({})
   const pendingVarorAdjustmentsRef = useRef<Record<string, number>>({})
   const inFlightVarorAdjustmentsRef = useRef<Record<string, number>>({})
   const varorAdjustmentTimeoutsRef = useRef<Record<string, number>>({})
@@ -79,7 +82,6 @@ export function ShoppingListDetailPage() {
     : currentView === 'search'
       ? viewPath(actorName, listId, 'items')
       : `/${actorName}`
-  const previousSearchSessionRef = useRef({ searchInput, view: currentView })
   const previousViewRef = useRef(currentView)
 
   const loadList = useEffectEvent(async (options: { background?: boolean } = {}) => {
@@ -109,14 +111,17 @@ export function ShoppingListDetailPage() {
   })
 
   useEffect(() => {
+    clearAllSearchAddTimeouts()
     clearAllVarorAdjustmentTimeouts()
     pendingVarorAdjustmentsRef.current = {}
     inFlightVarorAdjustmentsRef.current = {}
     pendingSearchAddsRef.current = {}
+    inFlightSearchAddsRef.current = {}
     localMutationVersionRef.current = 0
     listLoadRequestIdRef.current = 0
     appliedListLoadRequestIdRef.current = 0
     setPendingSearchAdds({})
+    setBusySearchActionKeys({})
     void loadList()
   }, [listId])
 
@@ -198,48 +203,69 @@ export function ShoppingListDetailPage() {
     setSearchInput(searchParams.get('q') ?? '')
   }, [searchParams])
 
-  const flushPendingSearchAdds = useEffectEvent(async () => {
-    const pendingEntries = Object.values(pendingSearchAddsRef.current)
-    if (!pendingEntries.length) {
+  const flushPendingSearchAdd = useEffectEvent(async (actionKey: string) => {
+    const pendingAdd = pendingSearchAddsRef.current[actionKey]
+    if (!pendingAdd || inFlightSearchAddsRef.current[actionKey]) {
       return
     }
 
-    setIsFlushingSearchAdds(true)
+    clearSearchAddTimeout(actionKey)
+    inFlightSearchAddsRef.current = {
+      ...inFlightSearchAddsRef.current,
+      [actionKey]: pendingAdd.quantity,
+    }
+    setBusySearchActionKeys((current) => ({
+      ...current,
+      [actionKey]: true,
+    }))
     setError(null)
     try {
-      const savedItems: ShoppingListItem[] = []
-      for (const pendingAdd of pendingEntries) {
-        savedItems.push(
-          pendingAdd.kind === 'manual'
-            ? await addManualItem(actorName, listId, pendingAdd.title, pendingAdd.note, pendingAdd.quantity)
-            : await addExternalItem(actorName, listId, pendingAdd.result, pendingAdd.quantity),
-        )
+      const savedItem =
+        pendingAdd.kind === 'manual'
+          ? await addManualItem(actorName, listId, pendingAdd.title, pendingAdd.note, pendingAdd.quantity)
+          : await addExternalItem(actorName, listId, pendingAdd.result, pendingAdd.quantity)
+      const currentPendingQuantity = pendingSearchAddsRef.current[actionKey]?.quantity ?? 0
+      const remainingQuantity = currentPendingQuantity - pendingAdd.quantity
+
+      if (remainingQuantity <= 0) {
+        const { [actionKey]: _ignoredPendingAdd, ...remainingPendingSearchAdds } = pendingSearchAddsRef.current
+        setPendingSearchAddsState(remainingPendingSearchAdds)
+      } else {
+        setPendingSearchAddsState({
+          ...pendingSearchAddsRef.current,
+          [actionKey]: {
+            ...pendingAdd,
+            quantity: remainingQuantity,
+          },
+        })
       }
-      patchItemsInList(savedItems)
-      pendingSearchAddsRef.current = {}
-      setPendingSearchAdds({})
+
+      patchItemInList(savedItem)
+
+      const { [actionKey]: _ignoredInFlight, ...remainingInFlight } = inFlightSearchAddsRef.current
+      inFlightSearchAddsRef.current = remainingInFlight
+
+      if (remainingQuantity > 0) {
+        scheduleSearchAddFlush(actionKey, 0)
+      }
     } catch (flushError) {
+      const { [actionKey]: _ignoredInFlight, ...remainingInFlight } = inFlightSearchAddsRef.current
+      inFlightSearchAddsRef.current = remainingInFlight
       setError(flushError instanceof Error ? flushError.message : 'Kunde inte spara sökvalen.')
     } finally {
-      setIsFlushingSearchAdds(false)
+      setBusySearchActionKeys((current) => {
+        const { [actionKey]: _ignoredBusyAction, ...remainingBusyActionKeys } = current
+        return remainingBusyActionKeys
+      })
     }
   })
 
-  useEffect(() => {
-    const previousSearchSession = previousSearchSessionRef.current
-    const clearedSearch =
-      isSearchViewMode(previousSearchSession.view) &&
-      isSearchViewMode(currentView) &&
-      previousSearchSession.searchInput.trim().length > 0 &&
-      searchInput.trim().length === 0
-    const leftSearch = isSearchViewMode(previousSearchSession.view) && !isSearchViewMode(currentView)
-
-    previousSearchSessionRef.current = { searchInput, view: currentView }
-
-    if (clearedSearch || leftSearch) {
-      void flushPendingSearchAdds()
+  const flushAllPendingSearchAdds = useEffectEvent(async () => {
+    const pendingActionKeys = Object.keys(pendingSearchAddsRef.current)
+    for (const actionKey of pendingActionKeys) {
+      await flushPendingSearchAdd(actionKey)
     }
-  }, [currentView, flushPendingSearchAdds, searchInput])
+  })
 
   const flushPendingVarorAdjustment = useEffectEvent(async (itemId: string) => {
     const delta = pendingVarorAdjustmentsRef.current[itemId]
@@ -305,11 +331,13 @@ export function ShoppingListDetailPage() {
 
   useEffect(() => {
     function handlePageHide() {
+      void flushAllPendingSearchAdds()
       void flushAllPendingVarorAdjustments()
     }
 
     function handleVisibilityChange() {
       if (document.visibilityState === 'hidden') {
+        void flushAllPendingSearchAdds()
         void flushAllPendingVarorAdjustments()
       }
     }
@@ -320,6 +348,7 @@ export function ShoppingListDetailPage() {
     return () => {
       window.removeEventListener('pagehide', handlePageHide)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
+      clearAllSearchAddTimeouts()
       clearAllVarorAdjustmentTimeouts()
     }
   }, [])
@@ -425,6 +454,40 @@ export function ShoppingListDetailPage() {
     setPendingSearchAdds(nextPendingSearchAdds)
   }
 
+  function clearSearchAddTimeout(actionKey: string) {
+    const timeoutId = searchAddTimeoutsRef.current[actionKey]
+    if (timeoutId === undefined) {
+      return
+    }
+
+    window.clearTimeout(timeoutId)
+    const { [actionKey]: _ignoredTimeout, ...remainingTimeouts } = searchAddTimeoutsRef.current
+    searchAddTimeoutsRef.current = remainingTimeouts
+  }
+
+  function clearAllSearchAddTimeouts() {
+    for (const timeoutId of Object.values(searchAddTimeoutsRef.current)) {
+      window.clearTimeout(timeoutId)
+    }
+    searchAddTimeoutsRef.current = {}
+  }
+
+  function scheduleSearchAddFlush(actionKey: string, delay = SEARCH_ADD_DEBOUNCE_MS) {
+    if (!pendingSearchAddsRef.current[actionKey]) {
+      clearSearchAddTimeout(actionKey)
+      return
+    }
+
+    clearSearchAddTimeout(actionKey)
+    searchAddTimeoutsRef.current = {
+      ...searchAddTimeoutsRef.current,
+      [actionKey]: window.setTimeout(() => {
+        clearSearchAddTimeout(actionKey)
+        void flushPendingSearchAdd(actionKey)
+      }, delay),
+    }
+  }
+
   function markLocalMutationApplied() {
     localMutationVersionRef.current += 1
   }
@@ -438,6 +501,7 @@ export function ShoppingListDetailPage() {
         quantity: (currentPendingAdd?.quantity ?? 0) + 1,
       },
     })
+    scheduleSearchAddFlush(actionKey)
   }
 
   function decrementPendingSearchAdd(actionKey: string) {
@@ -449,6 +513,7 @@ export function ShoppingListDetailPage() {
     if (currentPendingAdd.quantity <= 1) {
       const { [actionKey]: _ignored, ...remainingPendingSearchAdds } = pendingSearchAddsRef.current
       setPendingSearchAddsState(remainingPendingSearchAdds)
+      clearSearchAddTimeout(actionKey)
       return
     }
 
@@ -459,6 +524,7 @@ export function ShoppingListDetailPage() {
         quantity: currentPendingAdd.quantity - 1,
       },
     })
+    scheduleSearchAddFlush(actionKey)
   }
 
   function patchItemInList(updatedItem: ShoppingListItem) {
@@ -473,27 +539,6 @@ export function ShoppingListDetailPage() {
         items: upsertListItem(currentList.items, updatedItem),
         lastModifiedByDisplayName: updatedItem.lastModifiedByDisplayName,
         updatedAt: updatedItem.updatedAt,
-      })
-    })
-  }
-
-  function patchItemsInList(updatedItems: ShoppingListItem[]) {
-    if (!updatedItems.length) {
-      return
-    }
-
-    markLocalMutationApplied()
-    setList((currentList) => {
-      if (!currentList) {
-        return currentList
-      }
-
-      const latestItem = updatedItems.reduce((latest, item) => (latest.updatedAt > item.updatedAt ? latest : item))
-      return applyPendingVarorAdjustmentsToList({
-        ...currentList,
-        items: updatedItems.reduce((items, item) => upsertListItem(items, item), currentList.items),
-        lastModifiedByDisplayName: latestItem.lastModifiedByDisplayName,
-        updatedAt: latestItem.updatedAt,
       })
     })
   }
@@ -637,6 +682,11 @@ export function ShoppingListDetailPage() {
       return
     }
 
+    if (manualSearchItem) {
+      queueVarorItemAdjustment(manualSearchItem, 1)
+      return
+    }
+
     incrementPendingSearchAdd(manualSearchActionKey, {
       kind: 'manual',
       note: '',
@@ -646,6 +696,12 @@ export function ShoppingListDetailPage() {
   }
 
   function handleAddRetailerItem(result: RetailerSearchResult) {
+    const matchingItem = findMatchingExternalSearchItem(list?.items ?? [], result)
+    if (matchingItem) {
+      queueVarorItemAdjustment(matchingItem, 1)
+      return
+    }
+
     incrementPendingSearchAdd(externalSearchKey(result), {
       kind: 'external',
       quantity: 1,
@@ -660,7 +716,7 @@ export function ShoppingListDetailPage() {
     }
 
     if (manualSearchItem) {
-      await handleDecreaseItem(manualSearchItem, itemActionKey(manualSearchItem))
+      queueVarorItemAdjustment(manualSearchItem, -1)
     }
   }
 
@@ -672,24 +728,7 @@ export function ShoppingListDetailPage() {
     }
 
     if (item) {
-      await handleDecreaseItem(item, itemActionKey(item))
-    }
-  }
-
-  async function handleDecreaseItem(item: ShoppingListItem, actionKey: string) {
-    setPendingActionKey(actionKey)
-    setError(null)
-    try {
-      const result = await decrementItem(actorName, listId, item.id)
-      if (result.removed || !result.item) {
-        removeItemFromList(result.itemId)
-      } else {
-        patchItemInList(result.item)
-      }
-    } catch (decreaseError) {
-      setError(decreaseError instanceof Error ? decreaseError.message : 'Kunde inte minska antalet.')
-    } finally {
-      setPendingActionKey(null)
+      queueVarorItemAdjustment(item, -1)
     }
   }
 
@@ -753,6 +792,7 @@ export function ShoppingListDetailPage() {
           onClick={() => {
             void (async () => {
               await flushAllPendingVarorAdjustments()
+              await flushAllPendingSearchAdds()
               await loadList()
             })()
           }}
@@ -861,7 +901,7 @@ export function ShoppingListDetailPage() {
                       <div className="catalog-row__aside">
                         <QuantityAction
                           count={manualSearchQuantity}
-                          isPending={isFlushingSearchAdds || (manualSearchItem ? pendingActionKey === itemActionKey(manualSearchItem) : false)}
+                          isPending={busySearchActionKeys[manualSearchActionKey] === true}
                           onDecrease={manualSearchQuantity > 0 ? handleDecreaseManualFromSearch : undefined}
                           onIncrease={handleAddManualFromSearch}
                           title={manualSearchLabel}
@@ -898,7 +938,7 @@ export function ShoppingListDetailPage() {
                           <div className="catalog-row__aside">
                             <QuantityAction
                               count={quantity}
-                              isPending={isFlushingSearchAdds || (matchingItem ? pendingActionKey === itemActionKey(matchingItem) : false)}
+                              isPending={busySearchActionKeys[externalSearchKey(result)] === true}
                               onDecrease={quantity > 0 ? () => void handleDecreaseRetailerItemFromSearch(result, matchingItem) : undefined}
                               onIncrease={() => void handleAddRetailerItem(result)}
                               title={result.title}
@@ -1194,10 +1234,6 @@ function labelForView(view: ViewMode) {
   return 'Checklista'
 }
 
-function isSearchViewMode(view: ViewMode) {
-  return view === 'search' || view === 'search-expanded'
-}
-
 function resolveView(pathname: string): ViewMode {
   if (pathname.endsWith('/varor/search/fler')) {
     return 'search-expanded'
@@ -1237,10 +1273,6 @@ function viewPath(actorName: string, listId: string, view: ViewMode, searchQuery
   }
 
   return `/${actorName}/lists/${listId}/varor`
-}
-
-function itemActionKey(item: ShoppingListItem) {
-  return `item:${item.id}`
 }
 
 function claimActionKey(itemId: string) {
