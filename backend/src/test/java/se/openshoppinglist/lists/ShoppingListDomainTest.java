@@ -86,4 +86,32 @@ class ShoppingListDomainTest {
                         "shopping-list-item.added"
                 );
     }
+
+    @Test
+    void adjustsItemQuantityByDelta() {
+        ShoppingList shoppingList = ShoppingList.create("Veckohandling", new ActorDisplayName("anna"), FIXED_CLOCK);
+
+        ShoppingListItem item = shoppingList.addManualItem("Tacosås", "", 2, new ActorDisplayName("anna"), FIXED_CLOCK);
+
+        ShoppingListItem increasedItem = shoppingList.adjustItemQuantity(item.getId(), 3, new ActorDisplayName("olle"), FIXED_CLOCK);
+        assertThat(increasedItem).isNotNull();
+        assertThat(increasedItem.getQuantity()).isEqualTo(5);
+
+        ShoppingListItem decreasedItem = shoppingList.adjustItemQuantity(item.getId(), -4, new ActorDisplayName("olle"), FIXED_CLOCK);
+        assertThat(decreasedItem).isNotNull();
+        assertThat(decreasedItem.getQuantity()).isEqualTo(1);
+
+        ShoppingListItem removedItem = shoppingList.adjustItemQuantity(item.getId(), -1, new ActorDisplayName("olle"), FIXED_CLOCK);
+        assertThat(removedItem).isNull();
+        assertThat(shoppingList.getItems()).isEmpty();
+        assertThat(shoppingList.pullDomainEvents())
+                .extracting("eventType")
+                .containsExactly(
+                        "shopping-list.created",
+                        "shopping-list-item.added",
+                        "shopping-list-item.quantity-increased",
+                        "shopping-list-item.quantity-decreased",
+                        "shopping-list-item.removed"
+                );
+    }
 }

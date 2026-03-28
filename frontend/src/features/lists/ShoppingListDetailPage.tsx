@@ -2,7 +2,7 @@ import { useDeferredValue, useEffect, useEffectEvent, useLayoutEffect, useMemo, 
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useActorName } from '../actor/useActorName'
-import { addExternalItem, addManualItem, checkItem, decrementItem, fetchList, toggleItemClaim, uncheckItem } from './api'
+import { addExternalItem, addManualItem, adjustItemQuantity, checkItem, decrementItem, fetchList, toggleItemClaim, uncheckItem } from './api'
 import { openListRealtimeSocket, shouldUseRealtimeSocket } from './realtime'
 import { searchRetailer } from '../retailer-search/api'
 import type {
@@ -41,6 +41,7 @@ interface PendingExternalSearchAdd {
 type PendingSearchAdd = PendingManualSearchAdd | PendingExternalSearchAdd
 
 const ROOT_VIEW_ORDER: Exclude<ViewMode, 'search'>[] = ['items', 'checklist']
+const VAROR_ADJUSTMENT_DEBOUNCE_MS = 600
 
 export function ShoppingListDetailPage() {
   const actorName = useActorName()
@@ -60,6 +61,9 @@ export function ShoppingListDetailPage() {
   const [error, setError] = useState<string | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
   const pendingSearchAddsRef = useRef<Record<string, PendingSearchAdd>>({})
+  const pendingVarorAdjustmentsRef = useRef<Record<string, number>>({})
+  const inFlightVarorAdjustmentsRef = useRef<Record<string, number>>({})
+  const varorAdjustmentTimeoutsRef = useRef<Record<string, number>>({})
   const searchResultsStateRef = useRef<SearchResultsState>({ query: '', pages: {} })
   const reconnectTimeoutRef = useRef<number | null>(null)
   const pollingIntervalRef = useRef<number | null>(null)
@@ -73,6 +77,7 @@ export function ShoppingListDetailPage() {
       ? viewPath(actorName, listId, 'items')
       : `/${actorName}`
   const previousSearchSessionRef = useRef({ searchInput, view: currentView })
+  const previousViewRef = useRef(currentView)
 
   const loadList = useEffectEvent(async (options: { background?: boolean } = {}) => {
     if (!options.background || list === null) {
@@ -82,7 +87,7 @@ export function ShoppingListDetailPage() {
     setError(null)
     try {
       const loadedList = await fetchList(listId)
-      setList(loadedList)
+      setList(applyPendingVarorAdjustmentsToList(loadedList))
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Kunde inte hämta listan.')
     } finally {
@@ -93,6 +98,9 @@ export function ShoppingListDetailPage() {
   })
 
   useEffect(() => {
+    clearAllVarorAdjustmentTimeouts()
+    pendingVarorAdjustmentsRef.current = {}
+    inFlightVarorAdjustmentsRef.current = {}
     pendingSearchAddsRef.current = {}
     setPendingSearchAdds({})
     void loadList()
@@ -218,6 +226,89 @@ export function ShoppingListDetailPage() {
       void flushPendingSearchAdds()
     }
   }, [currentView, flushPendingSearchAdds, searchInput])
+
+  const flushPendingVarorAdjustment = useEffectEvent(async (itemId: string) => {
+    const delta = pendingVarorAdjustmentsRef.current[itemId]
+    if (!delta || inFlightVarorAdjustmentsRef.current[itemId]) {
+      return
+    }
+
+    clearVarorAdjustmentTimeout(itemId)
+    inFlightVarorAdjustmentsRef.current = {
+      ...inFlightVarorAdjustmentsRef.current,
+      [itemId]: delta,
+    }
+    setError(null)
+
+    try {
+      const result = await adjustItemQuantity(actorName, listId, itemId, delta)
+      const remainingDelta = (pendingVarorAdjustmentsRef.current[itemId] ?? 0) - delta
+
+      if (remainingDelta === 0) {
+        const { [itemId]: _ignoredAdjustment, ...remainingAdjustments } = pendingVarorAdjustmentsRef.current
+        pendingVarorAdjustmentsRef.current = remainingAdjustments
+      } else {
+        pendingVarorAdjustmentsRef.current = {
+          ...pendingVarorAdjustmentsRef.current,
+          [itemId]: remainingDelta,
+        }
+      }
+
+      if (result.removed || !result.item) {
+        removeItemFromList(result.itemId)
+      } else {
+        patchItemInList(result.item)
+      }
+
+      const { [itemId]: _ignoredInFlight, ...remainingInFlight } = inFlightVarorAdjustmentsRef.current
+      inFlightVarorAdjustmentsRef.current = remainingInFlight
+
+      if (remainingDelta !== 0) {
+        scheduleVarorAdjustmentFlush(itemId, 0)
+      }
+    } catch (adjustError) {
+      const { [itemId]: _ignoredInFlight, ...remainingInFlight } = inFlightVarorAdjustmentsRef.current
+      inFlightVarorAdjustmentsRef.current = remainingInFlight
+      setError(adjustError instanceof Error ? adjustError.message : 'Kunde inte uppdatera antalet.')
+    }
+  })
+
+  const flushAllPendingVarorAdjustments = useEffectEvent(async () => {
+    const pendingItemIds = Object.keys(pendingVarorAdjustmentsRef.current)
+    for (const itemId of pendingItemIds) {
+      await flushPendingVarorAdjustment(itemId)
+    }
+  })
+
+  useEffect(() => {
+    const previousView = previousViewRef.current
+    previousViewRef.current = currentView
+
+    if (previousView === 'items' && currentView !== 'items') {
+      void flushAllPendingVarorAdjustments()
+    }
+  }, [currentView, flushAllPendingVarorAdjustments])
+
+  useEffect(() => {
+    function handlePageHide() {
+      void flushAllPendingVarorAdjustments()
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'hidden') {
+        void flushAllPendingVarorAdjustments()
+      }
+    }
+
+    window.addEventListener('pagehide', handlePageHide)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      window.removeEventListener('pagehide', handlePageHide)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      clearAllVarorAdjustmentTimeouts()
+    }
+  }, [])
 
   useLayoutEffect(() => {
     if (currentView !== 'search') {
@@ -358,12 +449,12 @@ export function ShoppingListDetailPage() {
         return currentList
       }
 
-      return {
+      return applyPendingVarorAdjustmentsToList({
         ...currentList,
         items: upsertListItem(currentList.items, updatedItem),
         lastModifiedByDisplayName: updatedItem.lastModifiedByDisplayName,
         updatedAt: updatedItem.updatedAt,
-      }
+      })
     })
   }
 
@@ -378,12 +469,12 @@ export function ShoppingListDetailPage() {
       }
 
       const latestItem = updatedItems.reduce((latest, item) => (latest.updatedAt > item.updatedAt ? latest : item))
-      return {
+      return applyPendingVarorAdjustmentsToList({
         ...currentList,
         items: updatedItems.reduce((items, item) => upsertListItem(items, item), currentList.items),
         lastModifiedByDisplayName: latestItem.lastModifiedByDisplayName,
         updatedAt: latestItem.updatedAt,
-      }
+      })
     })
   }
 
@@ -398,6 +489,110 @@ export function ShoppingListDetailPage() {
         items: currentList.items.filter((item) => item.id !== itemId),
       }
     })
+  }
+
+  function clearVarorAdjustmentTimeout(itemId: string) {
+    const timeoutId = varorAdjustmentTimeoutsRef.current[itemId]
+    if (timeoutId === undefined) {
+      return
+    }
+
+    window.clearTimeout(timeoutId)
+    const { [itemId]: _ignoredTimeout, ...remainingTimeouts } = varorAdjustmentTimeoutsRef.current
+    varorAdjustmentTimeoutsRef.current = remainingTimeouts
+  }
+
+  function clearAllVarorAdjustmentTimeouts() {
+    for (const timeoutId of Object.values(varorAdjustmentTimeoutsRef.current)) {
+      window.clearTimeout(timeoutId)
+    }
+    varorAdjustmentTimeoutsRef.current = {}
+  }
+
+  function scheduleVarorAdjustmentFlush(itemId: string, delay = VAROR_ADJUSTMENT_DEBOUNCE_MS) {
+    if (!pendingVarorAdjustmentsRef.current[itemId]) {
+      clearVarorAdjustmentTimeout(itemId)
+      return
+    }
+
+    clearVarorAdjustmentTimeout(itemId)
+    varorAdjustmentTimeoutsRef.current = {
+      ...varorAdjustmentTimeoutsRef.current,
+      [itemId]: window.setTimeout(() => {
+        clearVarorAdjustmentTimeout(itemId)
+        void flushPendingVarorAdjustment(itemId)
+      }, delay),
+    }
+  }
+
+  function applyPendingVarorAdjustmentsToList(sourceList: ShoppingListDetail) {
+    const pendingAdjustments = pendingVarorAdjustmentsRef.current
+    if (!Object.keys(pendingAdjustments).length) {
+      return sourceList
+    }
+
+    return {
+      ...sourceList,
+      items: sourceList.items.flatMap((item) => {
+        const delta = pendingAdjustments[item.id] ?? 0
+        if (delta === 0) {
+          return [item]
+        }
+
+        const nextQuantity = item.quantity + delta
+        if (nextQuantity < 1) {
+          return []
+        }
+
+        return [{ ...item, quantity: nextQuantity }]
+      }),
+    }
+  }
+
+  function applyVarorQuantityDelta(itemId: string, delta: number) {
+    if (delta === 0) {
+      return
+    }
+
+    setList((currentList) => {
+      if (!currentList) {
+        return currentList
+      }
+
+      const item = currentList.items.find((candidate) => candidate.id === itemId)
+      if (!item) {
+        return currentList
+      }
+
+      const nextQuantity = item.quantity + delta
+      return {
+        ...currentList,
+        items:
+          nextQuantity < 1
+            ? currentList.items.filter((candidate) => candidate.id !== itemId)
+            : upsertListItem(currentList.items, {
+                ...item,
+                quantity: nextQuantity,
+              }),
+      }
+    })
+  }
+
+  function queueVarorItemAdjustment(item: ShoppingListItem, delta: number) {
+    applyVarorQuantityDelta(item.id, delta)
+    const nextDelta = (pendingVarorAdjustmentsRef.current[item.id] ?? 0) + delta
+    if (nextDelta === 0) {
+      const { [item.id]: _ignoredAdjustment, ...remainingAdjustments } = pendingVarorAdjustmentsRef.current
+      pendingVarorAdjustmentsRef.current = remainingAdjustments
+      clearVarorAdjustmentTimeout(item.id)
+      return
+    }
+
+    pendingVarorAdjustmentsRef.current = {
+      ...pendingVarorAdjustmentsRef.current,
+      [item.id]: nextDelta,
+    }
+    scheduleVarorAdjustmentFlush(item.id)
   }
 
   function updateSearchValue(value: string) {
@@ -477,27 +672,6 @@ export function ShoppingListDetailPage() {
     }
   }
 
-  async function handleIncreaseExistingItem(item: ShoppingListItem) {
-    const actionKey = itemActionKey(item)
-    setPendingActionKey(actionKey)
-    setError(null)
-    try {
-      let updatedItem: ShoppingListItem | null = null
-      if (item.itemType === 'MANUAL') {
-        updatedItem = await addManualItem(actorName, listId, item.title, item.manualNote ?? '')
-      } else if (item.externalSnapshot) {
-        updatedItem = await addExternalItem(actorName, listId, toRetailerSearchResult(item))
-      }
-      if (updatedItem) {
-        patchItemInList(updatedItem)
-      }
-    } catch (increaseError) {
-      setError(increaseError instanceof Error ? increaseError.message : 'Kunde inte öka antalet.')
-    } finally {
-      setPendingActionKey(null)
-    }
-  }
-
   async function handleToggleItem(item: ShoppingListItem) {
     setPendingActionKey(item.id)
     setError(null)
@@ -533,6 +707,16 @@ export function ShoppingListDetailPage() {
     navigate(viewPath(actorName, listId, view))
   }
 
+  function handleIncreaseItemFromVaror(item: ShoppingListItem) {
+    setError(null)
+    queueVarorItemAdjustment(item, 1)
+  }
+
+  function handleDecreaseItemFromVaror(item: ShoppingListItem) {
+    setError(null)
+    queueVarorItemAdjustment(item, -1)
+  }
+
   return (
     <main className="app-frame">
       <header className="app-header">
@@ -543,7 +727,16 @@ export function ShoppingListDetailPage() {
           <span className="app-header__eyebrow">Att handla som {actorName}</span>
           <strong>{list?.name ?? 'Hämtar lista...'}</strong>
         </div>
-        <button className="header-action" onClick={() => void loadList()} type="button">
+        <button
+          className="header-action"
+          onClick={() => {
+            void (async () => {
+              await flushAllPendingVarorAdjustments()
+              await loadList()
+            })()
+          }}
+          type="button"
+        >
           Uppdatera
         </button>
       </header>
@@ -587,9 +780,9 @@ export function ShoppingListDetailPage() {
                           <div className="catalog-row__aside catalog-row__aside--stack">
                             <QuantityAction
                               count={item.quantity}
-                              isPending={pendingActionKey === itemActionKey(item)}
-                              onDecrease={() => void handleDecreaseItem(item, itemActionKey(item))}
-                              onIncrease={() => void handleIncreaseExistingItem(item)}
+                              isPending={false}
+                              onDecrease={() => handleDecreaseItemFromVaror(item)}
+                              onIncrease={() => handleIncreaseItemFromVaror(item)}
                               title={item.title}
                             />
                           </div>
@@ -1040,24 +1233,6 @@ function upsertListItem(items: ShoppingListItem[], updatedItem: ShoppingListItem
   }
 
   return items.map((item) => (item.id === updatedItem.id ? updatedItem : item))
-}
-
-function toRetailerSearchResult(item: ShoppingListItem): RetailerSearchResult {
-  if (!item.externalSnapshot) {
-    throw new Error('External item is missing snapshot data.')
-  }
-
-  return {
-    provider: item.externalSnapshot.provider,
-    articleId: item.externalSnapshot.articleId,
-    title: item.title,
-    subtitle: item.externalSnapshot.subtitle,
-    imageUrl: item.externalSnapshot.imageUrl,
-    category: item.externalSnapshot.category,
-    priceAmount: item.externalSnapshot.priceAmount,
-    currency: item.externalSnapshot.currency,
-    rawPayloadJson: '{}',
-  }
 }
 
 function groupItems(items: ShoppingListItem[]): ItemGroup[] {

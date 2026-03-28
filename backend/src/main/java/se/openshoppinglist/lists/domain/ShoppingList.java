@@ -180,6 +180,39 @@ public class ShoppingList extends AggregateRoot {
         return item;
     }
 
+    public ShoppingListItem adjustItemQuantity(UUID itemId, int delta, ActorDisplayName actorDisplayName, Clock clock) {
+        ensureActive();
+        if (delta == 0) {
+            throw new IllegalArgumentException("Item quantity delta must not be zero.");
+        }
+
+        ShoppingListItem item = getItem(itemId);
+        if (delta > 0) {
+            item.increaseQuantity(actorDisplayName, clock, delta);
+            touch(actorDisplayName, clock);
+            recordEvent(new ShoppingDomainEvent("shopping-list-item.quantity-increased", id, itemId, actorDisplayName.value(), updatedAt));
+            return item;
+        }
+
+        int decreaseAmount = Math.abs(delta);
+        if (decreaseAmount >= item.getQuantity()) {
+            while (!item.decreaseQuantity(actorDisplayName, clock)) {
+                // Drain the remaining quantity before removing the item from the list.
+            }
+            items.remove(item);
+            touch(actorDisplayName, clock);
+            recordEvent(new ShoppingDomainEvent("shopping-list-item.removed", id, null, actorDisplayName.value(), updatedAt));
+            return null;
+        }
+
+        for (int index = 0; index < decreaseAmount; index += 1) {
+            item.decreaseQuantity(actorDisplayName, clock);
+        }
+        touch(actorDisplayName, clock);
+        recordEvent(new ShoppingDomainEvent("shopping-list-item.quantity-decreased", id, itemId, actorDisplayName.value(), updatedAt));
+        return item;
+    }
+
     public UUID getId() {
         return id;
     }

@@ -728,8 +728,129 @@ describe('ShoppingListDetailPage', () => {
     })
   })
 
-  it('increments and decrements an item from the varor view', async () => {
+  it('batches repeated varor taps into a single quantity-adjust request', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch')
+
+    fetchMock.mockImplementation(async (input, init) => {
+      const url = String(input)
+
+      if (url === '/api/lists/list-1' && (!init?.method || init.method === 'GET')) {
+        return new Response(
+          JSON.stringify({
+            ...initialList,
+            items: [
+              {
+                id: 'item-1',
+                itemType: 'EXTERNAL_ARTICLE',
+                title: 'Kaffe',
+                checked: false,
+                checkedAt: null,
+                checkedByDisplayName: null,
+                lastModifiedByDisplayName: 'anna',
+                createdAt: '2026-03-26T18:05:00Z',
+                updatedAt: '2026-03-26T18:05:00Z',
+                position: 1,
+                quantity: 2,
+                manualNote: '',
+                externalSnapshot: {
+                  provider: 'willys',
+                  articleId: 'coffee-1',
+                  subtitle: '500g',
+                  imageUrl: null,
+                  category: 'Dryck',
+                  priceAmount: 87.5,
+                  currency: 'SEK',
+                },
+              },
+            ],
+            recentActivities: [],
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        )
+      }
+
+      if (url === '/api/lists/list-1/items/item-1/quantity-adjust') {
+        const body = JSON.parse(String(init?.body))
+        return new Response(
+          JSON.stringify({
+            itemId: 'item-1',
+            removed: false,
+            item: {
+              id: 'item-1',
+              itemType: 'EXTERNAL_ARTICLE',
+              title: 'Kaffe',
+              checked: false,
+              checkedAt: null,
+              checkedByDisplayName: null,
+              lastModifiedByDisplayName: 'anna',
+              createdAt: '2026-03-26T18:05:00Z',
+              updatedAt: '2026-03-26T18:06:00Z',
+              position: 1,
+              quantity: 2 + body.delta,
+              manualNote: '',
+              externalSnapshot: {
+                provider: 'willys',
+                articleId: 'coffee-1',
+                subtitle: '500g',
+                imageUrl: null,
+                category: 'Dryck',
+                priceAmount: 87.5,
+                currency: 'SEK',
+              },
+            },
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        )
+      }
+
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+
+    render(
+      <MemoryRouter initialEntries={['/anna/lists/list-1/varor']}>
+        <AppShell />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('Kaffe')).toBeInTheDocument()
+    expect(screen.getByText('175.00 SEK')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Öka Kaffe' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Öka Kaffe' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Öka Kaffe' }))
+
+    expect(screen.getByRole('group', { name: 'Antal för Kaffe' })).toHaveTextContent('5')
+    expect(screen.getByText('437.50 SEK')).toBeInTheDocument()
+    expect(fetchMock.mock.calls.filter(([url]) => url === '/api/lists/list-1/items/item-1/quantity-adjust')).toHaveLength(0)
+
+    await waitFor(
+      () => {
+        expect(fetchMock).toHaveBeenCalledWith(
+          '/api/lists/list-1/items/item-1/quantity-adjust',
+          expect.objectContaining({
+            method: 'POST',
+            body: JSON.stringify({
+              delta: 3,
+            }),
+            headers: expect.objectContaining({
+              'X-Actor-Display-Name': 'anna',
+            }),
+          }),
+        )
+      },
+      { timeout: 1_500 },
+    )
+  })
+
+  it('does not post a varor quantity-adjust request when the net delta returns to zero', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+
     fetchMock.mockResolvedValueOnce(
       new Response(
         JSON.stringify({
@@ -767,72 +888,6 @@ describe('ShoppingListDetailPage', () => {
         },
       ),
     )
-    fetchMock.mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({
-          id: 'item-1',
-          itemType: 'EXTERNAL_ARTICLE',
-          title: 'Kaffe',
-          checked: false,
-          checkedAt: null,
-          checkedByDisplayName: null,
-          lastModifiedByDisplayName: 'anna',
-          createdAt: '2026-03-26T18:05:00Z',
-          updatedAt: '2026-03-26T18:05:30Z',
-          position: 1,
-          quantity: 3,
-          manualNote: '',
-          externalSnapshot: {
-            provider: 'willys',
-            articleId: 'coffee-1',
-            subtitle: '500g',
-            imageUrl: null,
-            category: 'Dryck',
-            priceAmount: 87.5,
-            currency: 'SEK',
-          },
-        }),
-        {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        },
-      ),
-    )
-    fetchMock.mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({
-          itemId: 'item-1',
-          removed: false,
-          item: {
-            id: 'item-1',
-            itemType: 'EXTERNAL_ARTICLE',
-            title: 'Kaffe',
-            checked: false,
-            checkedAt: null,
-            checkedByDisplayName: null,
-            lastModifiedByDisplayName: 'anna',
-            createdAt: '2026-03-26T18:05:00Z',
-            updatedAt: '2026-03-26T18:06:00Z',
-            position: 1,
-            quantity: 2,
-            manualNote: '',
-            externalSnapshot: {
-              provider: 'willys',
-              articleId: 'coffee-1',
-              subtitle: '500g',
-              imageUrl: null,
-              category: 'Dryck',
-              priceAmount: 87.5,
-              currency: 'SEK',
-            },
-          },
-        }),
-        {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        },
-      ),
-    )
 
     render(
       <MemoryRouter initialEntries={['/anna/lists/list-1/varor']}>
@@ -841,39 +896,18 @@ describe('ShoppingListDetailPage', () => {
     )
 
     expect(await screen.findByText('Kaffe')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Öka Kaffe' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Minska Kaffe' }))
+
+    expect(screen.getByRole('group', { name: 'Antal för Kaffe' })).toHaveTextContent('2')
     expect(screen.getByText('175.00 SEK')).toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('button', { name: 'Öka Kaffe' }))
-
-    expect(await screen.findByText('262.50 SEK')).toBeInTheDocument()
-
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(
-        '/api/lists/list-1/items/external',
-        expect.objectContaining({
-          method: 'POST',
-          headers: expect.objectContaining({
-            'X-Actor-Display-Name': 'anna',
-          }),
-        }),
-      )
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 700))
     })
 
-    await userEvent.click(screen.getByRole('button', { name: 'Minska Kaffe' }))
-
-    expect(await screen.findByText('175.00 SEK')).toBeInTheDocument()
-
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(
-        '/api/lists/list-1/items/item-1/decrement',
-        expect.objectContaining({
-          method: 'POST',
-          headers: expect.objectContaining({
-            'X-Actor-Display-Name': 'anna',
-          }),
-        }),
-      )
-    })
+    expect(fetchMock.mock.calls.filter(([url]) => url === '/api/lists/list-1/items/item-1/quantity-adjust')).toHaveLength(0)
   })
 
   it('reloads the list when another client update arrives over websocket', async () => {

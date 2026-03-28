@@ -179,6 +179,30 @@ public class ShoppingListController {
         );
     }
 
+    @PostMapping("/{listId}/items/{itemId}/quantity-adjust")
+    ShoppingListViews.ItemQuantityChangeView adjustItemQuantity(
+            @PathVariable UUID listId,
+            @PathVariable UUID itemId,
+            @RequestBody AdjustItemQuantityRequest request,
+            HttpServletRequest httpServletRequest
+    ) {
+        if (request.delta() == null || request.delta() == 0) {
+            throw new IllegalArgumentException("Item quantity delta must not be zero.");
+        }
+
+        ShoppingListCommandService.ItemQuantityChange result = shoppingListCommandService.adjustItemQuantity(
+                listId,
+                itemId,
+                request.delta(),
+                actorContextResolver.resolve(httpServletRequest)
+        );
+        return new ShoppingListViews.ItemQuantityChangeView(
+                result.itemId(),
+                result.removed(),
+                result.item() == null ? null : shoppingListQueryService.toItemView(result.item())
+        );
+    }
+
     public record CreateListRequest(@NotBlank String name) {
     }
 
@@ -200,5 +224,8 @@ public class ShoppingListController {
             String rawPayloadJson,
             @Positive Integer quantity
     ) {
+    }
+
+    public record AdjustItemQuantityRequest(Integer delta) {
     }
 }

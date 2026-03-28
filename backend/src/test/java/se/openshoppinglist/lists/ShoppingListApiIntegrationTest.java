@@ -170,6 +170,73 @@ class ShoppingListApiIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void adjustsExistingItemQuantityByDelta() throws Exception {
+        MvcResult createListResult = mockMvc.perform(post("/api/lists")
+                        .header(ActorDisplayName.HEADER_NAME, "anna")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Veckohandling"}
+                                """))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        String listId = readId(createListResult);
+
+        mockMvc.perform(post("/api/lists/{listId}/items/manual", listId)
+                        .header(ActorDisplayName.HEADER_NAME, "anna")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"title":"Tacobröd","note":"","quantity":2}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.quantity").value(2));
+
+        MvcResult listDetails = mockMvc.perform(get("/api/lists/{listId}", listId))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        String itemId = objectMapper.readTree(listDetails.getResponse().getContentAsString())
+                .path("items")
+                .path(0)
+                .path("id")
+                .asText();
+
+        mockMvc.perform(post("/api/lists/{listId}/items/{itemId}/quantity-adjust", listId, itemId)
+                        .header(ActorDisplayName.HEADER_NAME, "olle")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"delta":3}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.removed").value(false))
+                .andExpect(jsonPath("$.item.quantity").value(5));
+
+        mockMvc.perform(post("/api/lists/{listId}/items/{itemId}/quantity-adjust", listId, itemId)
+                        .header(ActorDisplayName.HEADER_NAME, "olle")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"delta":-4}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.removed").value(false))
+                .andExpect(jsonPath("$.item.quantity").value(1));
+
+        mockMvc.perform(post("/api/lists/{listId}/items/{itemId}/quantity-adjust", listId, itemId)
+                        .header(ActorDisplayName.HEADER_NAME, "olle")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"delta":-1}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.removed").value(true))
+                .andExpect(jsonPath("$.item").doesNotExist());
+
+        mockMvc.perform(get("/api/lists/{listId}", listId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items").isEmpty());
+    }
+
+    @Test
     void renamesExistingList() throws Exception {
         MvcResult createListResult = mockMvc.perform(post("/api/lists")
                         .header(ActorDisplayName.HEADER_NAME, "anna")

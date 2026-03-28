@@ -85,3 +85,11 @@ export function decrementItem(actorName: string, listId: string, itemId: string)
     actorName,
   })
 }
+
+export function adjustItemQuantity(actorName: string, listId: string, itemId: string, delta: number) {
+  return apiRequest<ItemQuantityChange>(`/api/lists/${listId}/items/${itemId}/quantity-adjust`, {
+    method: 'POST',
+    actorName,
+    body: { delta },
+  })
+}
