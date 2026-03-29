@@ -1,7 +1,5 @@
 package se.openshoppinglist.lists.application;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDate;
@@ -11,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import se.openshoppinglist.actor.ActorDisplayName;
 import se.openshoppinglist.common.events.DomainEventPublisher;
+import se.openshoppinglist.common.pricing.PricingMetadataService;
 import se.openshoppinglist.lists.domain.ExternalArticleSnapshot;
 import se.openshoppinglist.lists.domain.ShoppingList;
 import se.openshoppinglist.lists.domain.ShoppingListItem;
@@ -24,18 +23,18 @@ public class WillysListImportService {
     private final ShoppingListRepository shoppingListRepository;
     private final DomainEventPublisher domainEventPublisher;
     private final Clock clock;
-    private final ObjectMapper objectMapper;
+    private final PricingMetadataService pricingMetadataService;
 
     public WillysListImportService(
             ShoppingListRepository shoppingListRepository,
             DomainEventPublisher domainEventPublisher,
             Clock clock,
-            ObjectMapper objectMapper
+            PricingMetadataService pricingMetadataService
     ) {
         this.shoppingListRepository = shoppingListRepository;
         this.domainEventPublisher = domainEventPublisher;
         this.clock = clock;
-        this.objectMapper = objectMapper;
+        this.pricingMetadataService = pricingMetadataService;
     }
 
     @Transactional
@@ -74,7 +73,16 @@ public class WillysListImportService {
                                 blankToNull(entry.categoryName()),
                                 product.priceValue(),
                                 product.priceValue() == null ? null : "SEK",
-                                toJson(product)
+                                pricingMetadataService.toMetadataJson(
+                                        pricingMetadataService.fromWillysProduct(
+                                                product.name(),
+                                                product.productLine2(),
+                                                null,
+                                                product.priceUnit(),
+                                                product.comparePrice(),
+                                                product.comparePriceUnit()
+                                        )
+                                )
                         ),
                         quantity.intValueExact(),
                         actorDisplayName,
@@ -155,14 +163,6 @@ public class WillysListImportService {
         return value == null || value.isBlank() ? null : value.trim();
     }
 
-    private String toJson(ImportWillysProductCommand product) {
-        try {
-            return objectMapper.writeValueAsString(product);
-        } catch (JsonProcessingException exception) {
-            return "{}";
-        }
-    }
-
     public record ImportWillysListCommand(
             String name,
             LocalDate modifiedTime,
@@ -186,7 +186,10 @@ public class WillysListImportService {
             String name,
             String productLine2,
             BigDecimal priceValue,
-            String imageUrl
+            String imageUrl,
+            String priceUnit,
+            String comparePrice,
+            String comparePriceUnit
     ) {
     }
 }

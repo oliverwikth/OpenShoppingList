@@ -485,7 +485,6 @@ class ShoppingListApiIntegrationTest extends PostgresIntegrationTest {
                                   "category":"Taco",
                                   "priceAmount":39.90,
                                   "currency":"SEK",
-                                  "rawPayloadJson":"{}",
                                   "quantity":2
                                 }
                                 """))
@@ -577,7 +576,6 @@ class ShoppingListApiIntegrationTest extends PostgresIntegrationTest {
                                   "category":"Grönsaker",
                                   "priceAmount":39.90,
                                   "currency":"SEK",
-                                  "rawPayloadJson":"{}",
                                   "quantity":2
                                 }
                                 """))
@@ -671,69 +669,71 @@ class ShoppingListApiIntegrationTest extends PostgresIntegrationTest {
                         .header(ActorDisplayName.HEADER_NAME, "anna")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {
-                                  "name":"Importerad Willys-lista",
-                                  "modifiedTime":"2026-03-27",
-                                  "entries":[
-                                    {
-                                      "quantity":2,
-                                      "pickUnit":"pieces",
-                                      "categoryName":"Dryck",
-                                      "entryType":"PRODUCT",
-                                      "checked":true,
-                                      "product":{
-                                        "name":"Festivita Extra Mörkrost Bryggkaffe",
-                                        "code":"100467219_ST",
-                                        "productLine2":"ARVIDNORDQUIST, 500g",
-                                        "priceValue":87.5,
-                                        "image":{"url":"https://assets.axfood.se/image/upload/f_auto,t_200/07310760012308_C1R1_s01"}
+                                [
+                                  {
+                                    "name":"Importerad Willys-lista",
+                                    "modifiedTime":"2026-03-27",
+                                    "entries":[
+                                      {
+                                        "quantity":2,
+                                        "pickUnit":"pieces",
+                                        "categoryName":"Dryck",
+                                        "entryType":"PRODUCT",
+                                        "checked":true,
+                                        "product":{
+                                          "name":"Festivita Extra Mörkrost Bryggkaffe",
+                                          "code":"100467219_ST",
+                                          "productLine2":"ARVIDNORDQUIST, 500g",
+                                          "priceValue":87.5,
+                                          "image":{"url":"https://assets.axfood.se/image/upload/f_auto,t_200/07310760012308_C1R1_s01"}
+                                        }
+                                      },
+                                      {
+                                        "quantity":1,
+                                        "entryType":"FREETEXT",
+                                        "freeTextProduct":"Bröd",
+                                        "checked":false
+                                      },
+                                      {
+                                        "quantity":0.3,
+                                        "pickUnit":"kilogram",
+                                        "categoryName":"Frukt & Grönt",
+                                        "entryType":"PRODUCT",
+                                        "checked":false,
+                                        "product":{
+                                          "name":"Potatis Fast Klass 1",
+                                          "code":"100150587_KG",
+                                          "productLine2":"Sverige",
+                                          "priceValue":12.9,
+                                          "image":{"url":"https://assets.axfood.se/image/upload/f_auto,t_200/02359739200006_C1C0_s01"}
+                                        }
                                       }
-                                    },
-                                    {
-                                      "quantity":1,
-                                      "entryType":"FREETEXT",
-                                      "freeTextProduct":"Bröd",
-                                      "checked":false
-                                    },
-                                    {
-                                      "quantity":0.3,
-                                      "pickUnit":"kilogram",
-                                      "categoryName":"Frukt & Grönt",
-                                      "entryType":"PRODUCT",
-                                      "checked":false,
-                                      "product":{
-                                        "name":"Potatis Fast Klass 1",
-                                        "code":"100150587_KG",
-                                        "productLine2":"Sverige",
-                                        "priceValue":12.9,
-                                        "image":{"url":"https://assets.axfood.se/image/upload/f_auto,t_200/02359739200006_C1C0_s01"}
-                                      }
-                                    }
-                                  ]
-                                }
+                                    ]
+                                  }
+                                ]
                                 """))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.name").value("Importerad Willys-lista"))
-                .andExpect(jsonPath("$.updatedAt", startsWith("2026-03-27T")))
-                .andExpect(jsonPath("$.lastModifiedByDisplayName").value("anna"))
-                .andExpect(jsonPath("$.items[0].title").value("Festivita Extra Mörkrost Bryggkaffe"))
-                .andExpect(jsonPath("$.items[0].quantity").value(2))
-                .andExpect(jsonPath("$.items[0].checked").value(true))
-                .andExpect(jsonPath("$.items[0].checkedAt", startsWith("2026-03-27T")))
-                .andExpect(jsonPath("$.items[0].externalSnapshot.provider").value("willys"))
-                .andExpect(jsonPath("$.items[0].externalSnapshot.articleId").value("100467219_ST"))
-                .andExpect(jsonPath("$.items[0].externalSnapshot.category").value("Dryck"))
-                .andExpect(jsonPath("$.items[0].externalSnapshot.imageUrl").value("https://assets.axfood.se/image/upload/f_auto,t_200/07310760012308_C1R1_s01"))
-                .andExpect(jsonPath("$.items[1].title").value("Bröd"))
-                .andExpect(jsonPath("$.items[1].quantity").value(1))
-                .andExpect(jsonPath("$.items[1].checked").value(false))
-                .andExpect(jsonPath("$.items[1].externalSnapshot").doesNotExist())
-                .andExpect(jsonPath("$.items[2].title").value("Potatis Fast Klass 1"))
-                .andExpect(jsonPath("$.items[2].quantity").value(1))
-                .andExpect(jsonPath("$.items[2].checked").value(false))
-                .andExpect(jsonPath("$.items[2].manualNote").value("Importerad mängd: 0.3 kilogram • Sverige"))
-                .andExpect(jsonPath("$.items[2].externalSnapshot").doesNotExist())
-                .andExpect(jsonPath("$.recentActivities[0].occurredAt", startsWith("2026-03-27T")));
+                .andExpect(jsonPath("$[0].name").value("Importerad Willys-lista"))
+                .andExpect(jsonPath("$[0].updatedAt", startsWith("2026-03-27T")))
+                .andExpect(jsonPath("$[0].lastModifiedByDisplayName").value("anna"))
+                .andExpect(jsonPath("$[0].items[0].title").value("Festivita Extra Mörkrost Bryggkaffe"))
+                .andExpect(jsonPath("$[0].items[0].quantity").value(2))
+                .andExpect(jsonPath("$[0].items[0].checked").value(true))
+                .andExpect(jsonPath("$[0].items[0].checkedAt", startsWith("2026-03-27T")))
+                .andExpect(jsonPath("$[0].items[0].externalSnapshot.provider").value("willys"))
+                .andExpect(jsonPath("$[0].items[0].externalSnapshot.articleId").value("100467219_ST"))
+                .andExpect(jsonPath("$[0].items[0].externalSnapshot.category").value("Dryck"))
+                .andExpect(jsonPath("$[0].items[0].externalSnapshot.imageUrl").value("https://assets.axfood.se/image/upload/f_auto,t_200/07310760012308_C1R1_s01"))
+                .andExpect(jsonPath("$[0].items[1].title").value("Bröd"))
+                .andExpect(jsonPath("$[0].items[1].quantity").value(1))
+                .andExpect(jsonPath("$[0].items[1].checked").value(false))
+                .andExpect(jsonPath("$[0].items[1].externalSnapshot").doesNotExist())
+                .andExpect(jsonPath("$[0].items[2].title").value("Potatis Fast Klass 1"))
+                .andExpect(jsonPath("$[0].items[2].quantity").value(1))
+                .andExpect(jsonPath("$[0].items[2].checked").value(false))
+                .andExpect(jsonPath("$[0].items[2].manualNote").value("Importerad mängd: 0.3 kilogram • Sverige"))
+                .andExpect(jsonPath("$[0].items[2].externalSnapshot").doesNotExist())
+                .andExpect(jsonPath("$[0].recentActivities[0].occurredAt", startsWith("2026-03-27T")));
     }
 
     @Test
@@ -880,26 +880,28 @@ class ShoppingListApiIntegrationTest extends PostgresIntegrationTest {
                         .header(ActorDisplayName.HEADER_NAME, "anna")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {
-                                  "name":"%s",
-                                  "modifiedTime":"%s",
-                                  "entries":[
-                                    {
-                                      "quantity":1,
-                                      "pickUnit":"pieces",
-                                      "categoryName":"Test",
-                                      "entryType":"PRODUCT",
-                                      "checked":true,
-                                      "product":{
-                                        "name":"Testvara",
-                                        "code":"%s",
-                                        "productLine2":"TEST, 1st",
-                                        "priceValue":%s,
-                                        "image":{"url":"https://example.com/test.jpg"}
+                                [
+                                  {
+                                    "name":"%s",
+                                    "modifiedTime":"%s",
+                                    "entries":[
+                                      {
+                                        "quantity":1,
+                                        "pickUnit":"pieces",
+                                        "categoryName":"Test",
+                                        "entryType":"PRODUCT",
+                                        "checked":true,
+                                        "product":{
+                                          "name":"Testvara",
+                                          "code":"%s",
+                                          "productLine2":"TEST, 1st",
+                                          "priceValue":%s,
+                                          "image":{"url":"https://example.com/test.jpg"}
+                                        }
                                       }
-                                    }
-                                  ]
-                                }
+                                    ]
+                                  }
+                                ]
                                 """.formatted(name, modifiedTime, productCode, priceValue)))
                 .andExpect(status().isOk());
     }

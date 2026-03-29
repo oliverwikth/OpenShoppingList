@@ -1,7 +1,5 @@
 package se.openshoppinglist.retailer.infrastructure;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.net.ConnectException;
 import java.net.HttpURLConnection;
@@ -18,6 +16,7 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.ResourceAccessException;
 import se.openshoppinglist.config.AppProperties;
+import se.openshoppinglist.common.pricing.PricingMetadataService;
 import se.openshoppinglist.retailer.application.RetailerSearchPort;
 import se.openshoppinglist.retailer.domain.RetailerArticleSearchResult;
 import se.openshoppinglist.retailer.domain.RetailerSearchResponse;
@@ -26,17 +25,17 @@ import se.openshoppinglist.retailer.domain.RetailerSearchResponse;
 class WillysRetailerSearchAdapter implements RetailerSearchPort {
 
     private final RestClient restClient;
-    private final ObjectMapper objectMapper;
     private final AppProperties.WillysProperties properties;
+    private final PricingMetadataService pricingMetadataService;
 
     WillysRetailerSearchAdapter(
             @Qualifier("willysRestClient") RestClient restClient,
-            ObjectMapper objectMapper,
-            AppProperties appProperties
+            AppProperties appProperties,
+            PricingMetadataService pricingMetadataService
     ) {
         this.restClient = restClient;
-        this.objectMapper = objectMapper;
         this.properties = appProperties.retailer().willys();
+        this.pricingMetadataService = pricingMetadataService;
     }
 
     @Override
@@ -126,21 +125,16 @@ class WillysRetailerSearchAdapter implements RetailerSearchPort {
                 WillysCategoryResolver.topLevelAnalyticsCategory(product.googleAnalyticsCategory()),
                 product.priceValue(),
                 product.priceValue() == null ? null : "SEK",
-                toJson(product),
+                pricingMetadataService.fromWillysProduct(
+                        product.name(),
+                        product.productLine2(),
+                        product.price(),
+                        product.priceUnit(),
+                        product.comparePrice(),
+                        product.comparePriceUnit()
+                ),
                 0
         );
-    }
-
-    private String toJson(WillysProduct product) {
-        try {
-            return objectMapper.writeValueAsString(product);
-        } catch (JsonProcessingException exception) {
-            return "{}";
-        }
-    }
-
-    private String blankToNull(String value) {
-        return value == null || value.isBlank() ? null : value;
     }
 
     record WillysSearchResponse(WillysPagination pagination, List<WillysProduct> results) {

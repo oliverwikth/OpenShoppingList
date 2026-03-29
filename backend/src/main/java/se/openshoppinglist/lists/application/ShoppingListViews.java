@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import se.openshoppinglist.common.pricing.PricingDetails;
 import se.openshoppinglist.lists.domain.ShoppingListItemType;
 import se.openshoppinglist.lists.domain.ShoppingListStatus;
 
@@ -118,7 +119,7 @@ public final class ShoppingListViews {
             String category,
             BigDecimal priceAmount,
             String currency,
-            String rawPayloadJson
+            PricingDetails pricing
     ) {
     }
 

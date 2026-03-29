@@ -21,6 +21,8 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import se.openshoppinglist.common.pricing.PricingDetails;
+import se.openshoppinglist.common.pricing.PricingMetadataService;
 import se.openshoppinglist.lists.domain.ShoppingList;
 import se.openshoppinglist.lists.domain.ShoppingListItem;
 import se.openshoppinglist.lists.domain.ShoppingListRepository;
@@ -30,14 +32,18 @@ public class ShoppingStatsQueryService {
 
     private static final DateTimeFormatter MONTH_LABEL_FORMATTER = DateTimeFormatter.ofPattern("MMM", Locale.forLanguageTag("sv-SE"));
     private static final DateTimeFormatter MONTH_PERIOD_LABEL_FORMATTER = DateTimeFormatter.ofPattern("MMMM yyyy", Locale.forLanguageTag("sv-SE"));
-    private static final BigDecimal ASSUMED_WEIGHTED_ITEM_KILOGRAMS = new BigDecimal("0.1");
-
     private final ShoppingListRepository shoppingListRepository;
     private final Clock clock;
+    private final PricingMetadataService pricingMetadataService;
 
-    public ShoppingStatsQueryService(ShoppingListRepository shoppingListRepository, Clock clock) {
+    public ShoppingStatsQueryService(
+            ShoppingListRepository shoppingListRepository,
+            Clock clock,
+            PricingMetadataService pricingMetadataService
+    ) {
         this.shoppingListRepository = shoppingListRepository;
         this.clock = clock;
+        this.pricingMetadataService = pricingMetadataService;
     }
 
     @Transactional(readOnly = true)
@@ -94,7 +100,8 @@ public class ShoppingStatsQueryService {
                         item.getSourcePriceAmount(),
                         item.getSourceSubtitle(),
                         item.getSourceCurrency(),
-                        item.getSourceImageUrl()
+                        item.getSourceImageUrl(),
+                        item.getSourcePayloadJson()
                 ))
                 .toList();
     }
@@ -207,31 +214,11 @@ public class ShoppingStatsQueryService {
     }
 
     private BigDecimal pricedQuantityFactor(CheckedItemSnapshot item) {
-        BigDecimal quantity = BigDecimal.valueOf(item.quantity());
-        if (isPerKilogramPrice(item)) {
-            return quantity.multiply(ASSUMED_WEIGHTED_ITEM_KILOGRAMS);
-        }
-
-        return quantity;
-    }
-
-    private boolean isPerKilogramPrice(CheckedItemSnapshot item) {
-        String normalizedSubtitle = normalizeForUnitDetection(item.subtitle());
-        String normalizedTitle = normalizeForUnitDetection(item.title());
-        return normalizedSubtitle.contains("kr/kg")
-                || normalizedSubtitle.contains("/kg")
-                || normalizedSubtitle.contains("perkg")
-                || normalizedTitle.contains("kr/kg")
-                || normalizedTitle.contains("/kg")
-                || normalizedTitle.contains("perkg");
-    }
-
-    private String normalizeForUnitDetection(String value) {
-        if (value == null || value.isBlank()) {
-            return "";
-        }
-
-        return value.trim().toLowerCase(Locale.ROOT).replace(" ", "");
+        PricingDetails pricing = pricingMetadataService.fromStoredMetadata(item.title(), item.subtitle(), item.pricingMetadataJson());
+        BigDecimal factor = pricing.assumedQuantityFactor() == null
+                ? PricingMetadataService.DEFAULT_QUANTITY_FACTOR
+                : pricing.assumedQuantityFactor();
+        return BigDecimal.valueOf(item.quantity()).multiply(factor);
     }
 
     private record CheckedItemSnapshot(
@@ -242,7 +229,8 @@ public class ShoppingStatsQueryService {
             BigDecimal priceAmount,
             String subtitle,
             String currency,
-            String imageUrl
+            String imageUrl,
+            String pricingMetadataJson
     ) {
     }
 

@@ -46,7 +46,7 @@ public class RetailerSearchService {
                                     result.category(),
                                     result.priceAmount(),
                                     result.currency(),
-                                    result.rawPayloadJson(),
+                                    result.pricing(),
                                     purchaseCount
                             ),
                             articlePurchaseCount,

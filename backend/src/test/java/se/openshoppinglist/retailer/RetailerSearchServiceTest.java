@@ -60,7 +60,7 @@ class RetailerSearchServiceTest {
                 null,
                 null,
                 null,
-                "{}",
+                null,
                 0
         );
         RetailerSearchPort port = (query, page) -> new RetailerSearchResponse("willys", query, page, 3, 30, true, true, null, List.of(result));
@@ -85,9 +85,9 @@ class RetailerSearchServiceTest {
                 true,
                 null,
                 List.of(
-                        new RetailerArticleSearchResult("willys", "101", "Halloumi budget", "200g", null, null, null, null, "{}", 0),
-                        new RetailerArticleSearchResult("willys", "202", "Halloumi favorit", "200g", null, null, null, null, "{}", 0),
-                        new RetailerArticleSearchResult("willys", "303", "Halloumi premium", "200g", null, null, null, null, "{}", 0)
+                        new RetailerArticleSearchResult("willys", "101", "Halloumi budget", "200g", null, null, null, null, null, 0),
+                        new RetailerArticleSearchResult("willys", "202", "Halloumi favorit", "200g", null, null, null, null, null, 0),
+                        new RetailerArticleSearchResult("willys", "303", "Halloumi premium", "200g", null, null, null, null, null, 0)
                 )
         );
 
@@ -122,9 +122,9 @@ class RetailerSearchServiceTest {
                 true,
                 null,
                 List.of(
-                        new RetailerArticleSearchResult("willys", "101", "Halloumi budget", "200g", null, null, null, null, "{}", 0),
-                        new RetailerArticleSearchResult("willys", "202", "Halloumi favorit", "200g", null, null, null, null, "{}", 0),
-                        new RetailerArticleSearchResult("willys", "303", "Halloumi premium", "200g", null, null, null, null, "{}", 0)
+                        new RetailerArticleSearchResult("willys", "101", "Halloumi budget", "200g", null, null, null, null, null, 0),
+                        new RetailerArticleSearchResult("willys", "202", "Halloumi favorit", "200g", null, null, null, null, null, 0),
+                        new RetailerArticleSearchResult("willys", "303", "Halloumi premium", "200g", null, null, null, null, null, 0)
                 )
         );
 

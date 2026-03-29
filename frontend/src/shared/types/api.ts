@@ -22,6 +22,13 @@ export interface ShoppingListOverviewPage {
   hasNextPage: boolean
 }
 
+export interface PricingDetails {
+  unitPriceUnit: string | null
+  comparisonPriceAmount: number | null
+  comparisonPriceUnit: string | null
+  assumedQuantityFactor: number | null
+}
+
 export interface ExternalSnapshot {
   provider: string
   articleId: string
@@ -30,7 +37,7 @@ export interface ExternalSnapshot {
   category: string | null
   priceAmount: number | null
   currency: string | null
-  rawPayloadJson: string
+  pricing: PricingDetails | null
 }
 
 export interface ShoppingListItem {
@@ -119,7 +126,7 @@ export interface RetailerSearchResult {
   category: string | null
   priceAmount: number | null
   currency: string | null
-  rawPayloadJson: string
+  pricing: PricingDetails | null
   purchaseCount?: number
 }
 

@@ -1402,26 +1402,25 @@ function formatPrice(priceAmount: number, currency: string | null | undefined = 
 }
 
 function priceLabelsForItem(item: ShoppingListItem) {
-  return priceLabelsForSource(item.externalSnapshot?.priceAmount, item.externalSnapshot?.currency, item.externalSnapshot?.rawPayloadJson)
+  return priceLabelsForSource(item.externalSnapshot?.priceAmount, item.externalSnapshot?.currency, item.externalSnapshot?.pricing)
 }
 
 function priceLabelsForSearchResult(result: RetailerSearchResult) {
-  return priceLabelsForSource(result.priceAmount, result.currency, result.rawPayloadJson)
+  return priceLabelsForSource(result.priceAmount, result.currency, result.pricing)
 }
 
 function priceLabelsForSource(
   priceAmount: number | null | undefined,
   currency: string | null | undefined,
-  rawPayloadJson: string | null | undefined,
+  pricing: { unitPriceUnit: string | null; comparisonPriceAmount: number | null; comparisonPriceUnit: string | null } | null | undefined,
 ) {
   if (priceAmount === null || priceAmount === undefined) {
     return []
   }
 
-  const pricing = extractPricingPayload(rawPayloadJson)
   const labels = [
-    formatUnitPrice(priceAmount, currency, pricing.priceUnit ?? extractUnitFromPriceText(pricing.price)),
-    formatComparisonPrice(pricing.comparePrice, pricing.comparePriceUnit, currency),
+    formatUnitPrice(priceAmount, currency, pricing?.unitPriceUnit ?? null),
+    formatComparisonPrice(pricing?.comparisonPriceAmount ?? null, pricing?.comparisonPriceUnit ?? null, currency),
   ].filter((label): label is string => Boolean(label))
 
   return labels.filter((label, index) => labels.indexOf(label) === index)
@@ -1433,14 +1432,17 @@ function formatUnitPrice(priceAmount: number, currency: string | null | undefine
   return normalizedUnit ? `${formattedPrice}/${normalizedUnit}` : formattedPrice
 }
 
-function formatComparisonPrice(comparePrice: string | null, comparePriceUnit: string | null, currency: string | null | undefined) {
-  const amount = parseLocalizedPrice(comparePrice)
-  const unit = normalizeComparisonUnit(comparePriceUnit)
-  if (amount === null || unit === null) {
+function formatComparisonPrice(
+  comparePriceAmount: number | null,
+  comparePriceUnit: string | null,
+  currency: string | null | undefined,
+) {
+  const unit = normalizePriceUnit(comparePriceUnit)
+  if (comparePriceAmount === null || unit === null) {
     return null
   }
 
-  return `${formatPrice(amount, currency)}/${unit}`
+  return `${formatPrice(comparePriceAmount, currency)}/${unit}`
 }
 
 function calculatePricedItemsTotal(items: ShoppingListItem[]) {
@@ -1457,105 +1459,9 @@ function calculatePricedItemsTotal(items: ShoppingListItem[]) {
 
 function calculateEstimatedItemSpend(item: ShoppingListItem) {
   const priceAmount = item.externalSnapshot?.priceAmount ?? 0
-  const quantityFactor = isPerKilogramPrice(item) ? item.quantity * 0.1 : item.quantity
+  const assumedQuantityFactor = item.externalSnapshot?.pricing?.assumedQuantityFactor ?? 1
+  const quantityFactor = item.quantity * assumedQuantityFactor
   return priceAmount * quantityFactor
-}
-
-function isPerKilogramPrice(item: ShoppingListItem) {
-  return hasPerKilogramUnit({
-    title: item.title,
-    subtitle: item.externalSnapshot?.subtitle,
-    rawPayloadJson: item.externalSnapshot?.rawPayloadJson,
-  })
-}
-
-function hasPerKilogramUnit(source: {
-  title: string | null | undefined
-  subtitle: string | null | undefined
-  rawPayloadJson?: string | null | undefined
-}) {
-  const normalizedSubtitle = normalizeForUnitDetection(source.subtitle)
-  const normalizedTitle = normalizeForUnitDetection(source.title)
-  const pricing = extractPricingPayload(source.rawPayloadJson)
-  const normalizedPayloadUnit = normalizeForUnitDetection(
-    [pricing.priceUnit, pricing.comparePriceUnit, pricing.price].filter((value): value is string => Boolean(value)).join(' '),
-  )
-  return (
-    normalizedSubtitle.includes('kr/kg') ||
-    normalizedSubtitle.includes('/kg') ||
-    normalizedSubtitle.includes('perkg') ||
-    normalizedTitle.includes('kr/kg') ||
-    normalizedTitle.includes('/kg') ||
-    normalizedTitle.includes('perkg') ||
-    normalizedPayloadUnit.includes('kr/kg') ||
-    normalizedPayloadUnit.includes('/kg') ||
-    normalizedPayloadUnit.includes('perkg')
-  )
-}
-
-function normalizeForUnitDetection(value: string | null | undefined) {
-  if (!value?.trim()) {
-    return ''
-  }
-
-  return value.trim().toLocaleLowerCase('sv-SE').replaceAll(' ', '')
-}
-
-function extractPricingPayload(rawPayloadJson: string | null | undefined) {
-  if (!rawPayloadJson?.trim()) {
-    return {
-      comparePrice: null,
-      comparePriceUnit: null,
-      price: null,
-      priceUnit: null,
-    }
-  }
-
-  try {
-    const parsed = JSON.parse(rawPayloadJson) as {
-      comparePrice?: unknown
-      comparePriceUnit?: unknown
-      price?: unknown
-      priceUnit?: unknown
-    }
-
-    return {
-      comparePrice: typeof parsed.comparePrice === 'string' && parsed.comparePrice.trim() ? parsed.comparePrice : null,
-      comparePriceUnit:
-        typeof parsed.comparePriceUnit === 'string' && parsed.comparePriceUnit.trim() ? parsed.comparePriceUnit : null,
-      price: typeof parsed.price === 'string' && parsed.price.trim() ? parsed.price : null,
-      priceUnit: typeof parsed.priceUnit === 'string' && parsed.priceUnit.trim() ? parsed.priceUnit : null,
-    }
-  } catch {
-    return {
-      comparePrice: null,
-      comparePriceUnit: null,
-      price: null,
-      priceUnit: null,
-    }
-  }
-}
-
-function extractUnitFromPriceText(price: string | null) {
-  const normalizedPrice = normalizeForUnitDetection(price)
-  if (normalizedPrice.includes('/kg') || normalizedPrice.includes('kr/kg')) {
-    return 'kg'
-  }
-  if (normalizedPrice.includes('/st') || normalizedPrice.includes('kr/st')) {
-    return 'st'
-  }
-  if (normalizedPrice.includes('/l') || normalizedPrice.includes('kr/l')) {
-    return 'l'
-  }
-  return null
-}
-
-function normalizeComparisonUnit(unit: string | null) {
-  if (!unit?.trim()) {
-    return null
-  }
-
-  return unit.trim().toLocaleLowerCase('sv-SE')
 }
 
 function normalizePriceUnit(unit: string | null) {
@@ -1569,16 +1475,6 @@ function normalizePriceUnit(unit: string | null) {
   }
 
   return normalizedUnit
-}
-
-function parseLocalizedPrice(value: string | null) {
-  if (!value?.trim()) {
-    return null
-  }
-
-  const normalized = value.replace(/[^\d,.-]/g, '').replace(',', '.')
-  const parsed = Number.parseFloat(normalized)
-  return Number.isFinite(parsed) ? parsed : null
 }
 
 function findMatchingManualSearchItem(items: ShoppingListItem[], title: string) {

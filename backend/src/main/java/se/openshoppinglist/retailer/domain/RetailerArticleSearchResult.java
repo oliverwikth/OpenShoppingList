@@ -1,6 +1,7 @@
 package se.openshoppinglist.retailer.domain;
 
 import java.math.BigDecimal;
+import se.openshoppinglist.common.pricing.PricingDetails;
 
 public record RetailerArticleSearchResult(
         String provider,
@@ -11,7 +12,7 @@ public record RetailerArticleSearchResult(
         String category,
         BigDecimal priceAmount,
         String currency,
-        String rawPayloadJson,
+        PricingDetails pricing,
         int purchaseCount
 ) {
 }

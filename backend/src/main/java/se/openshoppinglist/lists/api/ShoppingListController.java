@@ -1,7 +1,5 @@
 package se.openshoppinglist.lists.api;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -20,6 +18,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import se.openshoppinglist.actor.ActorContextResolver;
+import se.openshoppinglist.common.pricing.PricingDetails;
+import se.openshoppinglist.common.pricing.PricingMetadataService;
 import se.openshoppinglist.lists.application.ShoppingListCommandService;
 import se.openshoppinglist.lists.application.ShoppingListQueryService;
 import se.openshoppinglist.lists.application.ShoppingStatsQueryService;
@@ -37,7 +37,7 @@ public class ShoppingListController {
     private final ShoppingStatsQueryService shoppingStatsQueryService;
     private final WillysListImportService willysListImportService;
     private final ActorContextResolver actorContextResolver;
-    private final ObjectMapper objectMapper;
+    private final PricingMetadataService pricingMetadataService;
 
     public ShoppingListController(
             ShoppingListCommandService shoppingListCommandService,
@@ -45,14 +45,14 @@ public class ShoppingListController {
             ShoppingStatsQueryService shoppingStatsQueryService,
             WillysListImportService willysListImportService,
             ActorContextResolver actorContextResolver,
-            ObjectMapper objectMapper
+            PricingMetadataService pricingMetadataService
     ) {
         this.shoppingListCommandService = shoppingListCommandService;
         this.shoppingListQueryService = shoppingListQueryService;
         this.shoppingStatsQueryService = shoppingStatsQueryService;
         this.willysListImportService = willysListImportService;
         this.actorContextResolver = actorContextResolver;
-        this.objectMapper = objectMapper;
+        this.pricingMetadataService = pricingMetadataService;
     }
 
     @GetMapping
@@ -85,31 +85,18 @@ public class ShoppingListController {
     }
 
     @PostMapping("/imports/willys")
-    Object importWillysList(
-            @RequestBody JsonNode requestBody,
+    List<ShoppingListViews.ShoppingListDetailView> importWillysList(
+            @Valid @RequestBody List<ImportWillysListRequest> requestBody,
             HttpServletRequest httpServletRequest
     ) {
-        if (requestBody == null || requestBody.isNull()) {
+        if (requestBody == null || requestBody.isEmpty()) {
             throw new IllegalArgumentException("Willys import body must not be empty.");
         }
-
-        if (requestBody.isArray()) {
-            return streamOf(requestBody.elements())
-                    .map(node -> objectMapper.convertValue(node, ImportWillysListRequest.class))
-                    .map(this::toImportCommand)
-                    .map(command -> willysListImportService.importList(command, actorContextResolver.resolve(httpServletRequest)))
-                    .map(importedList -> shoppingListQueryService.getList(importedList.getId()))
-                    .toList();
-        }
-
-        if (requestBody.isObject()) {
-            return shoppingListQueryService.getList(willysListImportService.importList(
-                    toImportCommand(objectMapper.convertValue(requestBody, ImportWillysListRequest.class)),
-                    actorContextResolver.resolve(httpServletRequest)
-            ).getId());
-        }
-
-        throw new IllegalArgumentException("Willys import body must be either an object or an array of objects.");
+        return requestBody.stream()
+                .map(this::toImportCommand)
+                .map(command -> willysListImportService.importList(command, actorContextResolver.resolve(httpServletRequest)))
+                .map(importedList -> shoppingListQueryService.getList(importedList.getId()))
+                .toList();
     }
 
     private WillysListImportService.ImportWillysListCommand toImportCommand(ImportWillysListRequest request) {
@@ -133,16 +120,14 @@ public class ShoppingListController {
                                                 entry.product().name(),
                                                 entry.product().productLine2(),
                                                 entry.product().priceValue(),
-                                                entry.product().image() == null ? null : entry.product().image().url()
+                                                entry.product().image() == null ? null : entry.product().image().url(),
+                                                entry.product().priceUnit(),
+                                                entry.product().comparePrice(),
+                                                entry.product().comparePriceUnit()
                                         )
                         ))
                         .toList()
         );
-    }
-
-    private <T> java.util.stream.Stream<T> streamOf(java.util.Iterator<T> iterator) {
-        Iterable<T> iterable = () -> iterator;
-        return java.util.stream.StreamSupport.stream(iterable.spliterator(), false);
     }
 
     private Integer resolvePageSize(String rawPageSize) {
@@ -212,7 +197,9 @@ public class ShoppingListController {
                 request.category(),
                 request.priceAmount(),
                 request.currency(),
-                request.rawPayloadJson()
+                pricingMetadataService.toMetadataJson(
+                        pricingMetadataService.fromRequest(request.title(), request.subtitle(), request.pricing())
+                )
         );
         return shoppingListQueryService.toItemView(shoppingListCommandService.addExternalItem(
                 listId,
@@ -321,7 +308,7 @@ public class ShoppingListController {
             String category,
             java.math.BigDecimal priceAmount,
             String currency,
-            String rawPayloadJson,
+            PricingDetails pricing,
             @Positive Integer quantity
     ) {
     }
@@ -348,6 +335,9 @@ public class ShoppingListController {
             String name,
             String productLine2,
             java.math.BigDecimal priceValue,
+            String priceUnit,
+            String comparePrice,
+            String comparePriceUnit,
             ImportWillysImageRequest image
     ) {
     }

@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import se.openshoppinglist.common.pricing.PricingMetadataService;
 import se.openshoppinglist.lists.domain.ShoppingList;
 import se.openshoppinglist.lists.domain.ShoppingListItem;
 import se.openshoppinglist.lists.domain.ShoppingListRepository;
@@ -24,13 +25,16 @@ public class ShoppingListQueryService {
 
     private final ShoppingListRepository shoppingListRepository;
     private final ItemActivityLogRepository itemActivityLogRepository;
+    private final PricingMetadataService pricingMetadataService;
 
     public ShoppingListQueryService(
             ShoppingListRepository shoppingListRepository,
-            ItemActivityLogRepository itemActivityLogRepository
+            ItemActivityLogRepository itemActivityLogRepository,
+            PricingMetadataService pricingMetadataService
     ) {
         this.shoppingListRepository = shoppingListRepository;
         this.itemActivityLogRepository = itemActivityLogRepository;
+        this.pricingMetadataService = pricingMetadataService;
     }
 
     @Transactional(readOnly = true)
@@ -117,7 +121,11 @@ public class ShoppingListQueryService {
                         item.getSourceCategory(),
                         item.getSourcePriceAmount(),
                         item.getSourceCurrency(),
-                        item.getSourcePayloadJson()
+                        pricingMetadataService.fromStoredMetadata(
+                                item.getTitle(),
+                                item.getSourceSubtitle(),
+                                item.getSourcePayloadJson()
+                        )
                 );
         return new ShoppingListItemView(
                 item.getId(),

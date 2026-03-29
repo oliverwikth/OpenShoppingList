@@ -207,7 +207,7 @@ describe('ShoppingListDetailPage', () => {
                 category: 'Grönsaker',
                 priceAmount: 39.9,
                 currency: 'SEK',
-                rawPayloadJson: '{}',
+                pricing: createPricing('kg', null, null, 0.1),
               },
             },
           ],
@@ -257,7 +257,7 @@ describe('ShoppingListDetailPage', () => {
                 category: 'Grönsaker',
                 priceAmount: 11.9,
                 currency: 'SEK',
-                rawPayloadJson: '{"priceUnit":"kr/kg"}',
+                pricing: createPricing('kg', null, null, 0.1),
               },
             },
           ],
@@ -303,7 +303,7 @@ describe('ShoppingListDetailPage', () => {
                 subtitle: 'ca: 175g, Sverige',
                 category: 'Grönsaker',
                 priceAmount: 11.9,
-                rawPayloadJson: '{"priceUnit":"kr/kg"}',
+                pricing: createPricing('kg', null, null, 0.1),
               },
             ]),
           ),
@@ -349,7 +349,7 @@ describe('ShoppingListDetailPage', () => {
                 subtitle: 'SCAN, 800g',
                 category: 'Kött, chark & fågel',
                 priceAmount: 39.8,
-                rawPayloadJson: '{"price":"39,80 kr","priceUnit":"kr/st","comparePrice":"49,75 kr","comparePriceUnit":"kg"}',
+                pricing: createPricing('st', 49.75, 'kg'),
               },
             ]),
           ),
@@ -401,7 +401,7 @@ describe('ShoppingListDetailPage', () => {
                 category: 'Kött, chark & fågel',
                 priceAmount: 39.8,
                 currency: 'SEK',
-                rawPayloadJson: '{"price":"39,80 kr","priceUnit":"kr/st","comparePrice":"49,75 kr","comparePriceUnit":"kg"}',
+                pricing: createPricing('st', 49.75, 'kg'),
               },
             },
           ],
@@ -644,7 +644,7 @@ describe('ShoppingListDetailPage', () => {
             category: 'Dryck',
             priceAmount: 39.9,
             currency: 'SEK',
-            rawPayloadJson: '{}',
+            pricing: createPricing(),
             quantity: 5,
           }),
           headers: expect.objectContaining({
@@ -1685,7 +1685,16 @@ function createRetailerResult(articleId: string, title: string) {
     category: 'Dryck',
     priceAmount: 39.9,
     currency: 'SEK',
-    rawPayloadJson: '{}',
+    pricing: createPricing(),
+  }
+}
+
+function createPricing(unitPriceUnit: string | null = null, comparisonPriceAmount: number | null = null, comparisonPriceUnit: string | null = null, assumedQuantityFactor = 1) {
+  return {
+    unitPriceUnit,
+    comparisonPriceAmount,
+    comparisonPriceUnit,
+    assumedQuantityFactor,
   }
 }
 

@@ -69,7 +69,7 @@ export function addExternalItem(actorName: string, listId: string, result: Retai
       category: result.category,
       priceAmount: result.priceAmount,
       currency: result.currency,
-      rawPayloadJson: result.rawPayloadJson,
+      pricing: result.pricing,
       quantity,
     },
   })
