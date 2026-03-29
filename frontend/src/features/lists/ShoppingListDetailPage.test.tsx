@@ -180,6 +180,55 @@ describe('ShoppingListDetailPage', () => {
     expect(content.indexOf('Äldre vara')).toBeLessThan(content.indexOf('Nyare vara'))
   })
 
+  it('uses the assumed weight for kilogram-priced items in the total bar', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          ...initialList,
+          items: [
+            {
+              id: 'item-1',
+              itemType: 'EXTERNAL_ARTICLE',
+              title: 'Gul lök',
+              checked: false,
+              checkedAt: null,
+              checkedByDisplayName: null,
+              lastModifiedByDisplayName: 'anna',
+              createdAt: '2026-03-26T18:05:00Z',
+              updatedAt: '2026-03-26T18:05:00Z',
+              position: 1,
+              quantity: 2,
+              manualNote: '',
+              externalSnapshot: {
+                provider: 'willys',
+                articleId: 'lok-1',
+                subtitle: '39,90 kr/kg',
+                imageUrl: null,
+                category: 'Grönsaker',
+                priceAmount: 39.9,
+                currency: 'SEK',
+              },
+            },
+          ],
+          recentActivities: [],
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+    )
+
+    render(
+      <MemoryRouter initialEntries={['/anna/lists/list-1/varor']}>
+        <AppShell />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('Gul lök')).toBeInTheDocument()
+    expect(screen.getByLabelText('Totalpris')).toHaveTextContent('7.98 SEK')
+  })
+
   it('debounces manual search adds after the last change', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch')
     let listFetchCount = 0

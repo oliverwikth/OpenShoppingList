@@ -544,6 +544,61 @@ class ShoppingListApiIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void usesAssumedWeightForKilogramPricedItemsInStats() throws Exception {
+        MvcResult createListResult = mockMvc.perform(post("/api/lists")
+                        .header(ActorDisplayName.HEADER_NAME, "anna")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Veckohandling"}
+                                """))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        String listId = readId(createListResult);
+
+        mockMvc.perform(post("/api/lists/{listId}/items/external", listId)
+                        .header(ActorDisplayName.HEADER_NAME, "anna")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "provider":"willys",
+                                  "articleId":"gul-lok",
+                                  "title":"Gul lök",
+                                  "subtitle":"39,90 kr/kg",
+                                  "imageUrl":"https://example.com/lok.jpg",
+                                  "category":"Grönsaker",
+                                  "priceAmount":39.90,
+                                  "currency":"SEK",
+                                  "rawPayloadJson":"{}",
+                                  "quantity":2
+                                }
+                                """))
+                .andExpect(status().isOk());
+
+        MvcResult listDetails = mockMvc.perform(get("/api/lists/{listId}", listId))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        String itemId = objectMapper.readTree(listDetails.getResponse().getContentAsString())
+                .path("items")
+                .path(0)
+                .path("id")
+                .asText();
+
+        mockMvc.perform(post("/api/lists/{listId}/items/{itemId}/check", listId, itemId)
+                        .header(ActorDisplayName.HEADER_NAME, "anna"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/lists/stats")
+                        .param("range", "month"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.spentAmount").value(7.98))
+                .andExpect(jsonPath("$.averagePricedItemAmount").value(3.99))
+                .andExpect(jsonPath("$.topItems[0].title").value("Gul lök"))
+                .andExpect(jsonPath("$.topItems[0].spentAmount").value(7.98));
+    }
+
+    @Test
     void importsAWillysListPayloadIntoANewShoppingList() throws Exception {
         mockMvc.perform(post("/api/lists/imports/willys")
                         .header(ActorDisplayName.HEADER_NAME, "anna")

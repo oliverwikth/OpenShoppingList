@@ -1406,11 +1406,38 @@ function calculatePricedItemsTotal(items: ShoppingListItem[]) {
     (item) => item.externalSnapshot?.priceAmount !== null && item.externalSnapshot?.priceAmount !== undefined,
   )
   const amount = pricedItems.reduce(
-    (sum, item) => sum + (item.externalSnapshot?.priceAmount ?? 0) * item.quantity,
+    (sum, item) => sum + calculateEstimatedItemSpend(item),
     0,
   )
   const currency = pricedItems.find((item) => item.externalSnapshot?.currency)?.externalSnapshot?.currency ?? 'SEK'
   return { amount, currency }
+}
+
+function calculateEstimatedItemSpend(item: ShoppingListItem) {
+  const priceAmount = item.externalSnapshot?.priceAmount ?? 0
+  const quantityFactor = isPerKilogramPrice(item) ? item.quantity * 0.1 : item.quantity
+  return priceAmount * quantityFactor
+}
+
+function isPerKilogramPrice(item: ShoppingListItem) {
+  const normalizedSubtitle = normalizeForUnitDetection(item.externalSnapshot?.subtitle)
+  const normalizedTitle = normalizeForUnitDetection(item.title)
+  return (
+    normalizedSubtitle.includes('kr/kg') ||
+    normalizedSubtitle.includes('/kg') ||
+    normalizedSubtitle.includes('perkg') ||
+    normalizedTitle.includes('kr/kg') ||
+    normalizedTitle.includes('/kg') ||
+    normalizedTitle.includes('perkg')
+  )
+}
+
+function normalizeForUnitDetection(value: string | null | undefined) {
+  if (!value?.trim()) {
+    return ''
+  }
+
+  return value.trim().toLocaleLowerCase('sv-SE').replaceAll(' ', '')
 }
 
 function findMatchingManualSearchItem(items: ShoppingListItem[], title: string) {

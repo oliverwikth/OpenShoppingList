@@ -30,6 +30,7 @@ public class ShoppingStatsQueryService {
 
     private static final DateTimeFormatter MONTH_LABEL_FORMATTER = DateTimeFormatter.ofPattern("MMM", Locale.forLanguageTag("sv-SE"));
     private static final DateTimeFormatter MONTH_PERIOD_LABEL_FORMATTER = DateTimeFormatter.ofPattern("MMMM yyyy", Locale.forLanguageTag("sv-SE"));
+    private static final BigDecimal ASSUMED_WEIGHTED_ITEM_KILOGRAMS = new BigDecimal("0.1");
 
     private final ShoppingListRepository shoppingListRepository;
     private final Clock clock;
@@ -91,6 +92,7 @@ public class ShoppingStatsQueryService {
                         item.getQuantity(),
                         item.getCheckedAt(),
                         item.getSourcePriceAmount(),
+                        item.getSourceSubtitle(),
                         item.getSourceCurrency(),
                         item.getSourceImageUrl()
                 ))
@@ -200,8 +202,36 @@ public class ShoppingStatsQueryService {
             return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
         }
         return item.priceAmount()
-                .multiply(BigDecimal.valueOf(item.quantity()))
+                .multiply(pricedQuantityFactor(item))
                 .setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal pricedQuantityFactor(CheckedItemSnapshot item) {
+        BigDecimal quantity = BigDecimal.valueOf(item.quantity());
+        if (isPerKilogramPrice(item)) {
+            return quantity.multiply(ASSUMED_WEIGHTED_ITEM_KILOGRAMS);
+        }
+
+        return quantity;
+    }
+
+    private boolean isPerKilogramPrice(CheckedItemSnapshot item) {
+        String normalizedSubtitle = normalizeForUnitDetection(item.subtitle());
+        String normalizedTitle = normalizeForUnitDetection(item.title());
+        return normalizedSubtitle.contains("kr/kg")
+                || normalizedSubtitle.contains("/kg")
+                || normalizedSubtitle.contains("perkg")
+                || normalizedTitle.contains("kr/kg")
+                || normalizedTitle.contains("/kg")
+                || normalizedTitle.contains("perkg");
+    }
+
+    private String normalizeForUnitDetection(String value) {
+        if (value == null || value.isBlank()) {
+            return "";
+        }
+
+        return value.trim().toLowerCase(Locale.ROOT).replace(" ", "");
     }
 
     private record CheckedItemSnapshot(
@@ -210,6 +240,7 @@ public class ShoppingStatsQueryService {
             int quantity,
             Instant checkedAt,
             BigDecimal priceAmount,
+            String subtitle,
             String currency,
             String imageUrl
     ) {
