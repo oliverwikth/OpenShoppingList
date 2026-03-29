@@ -112,6 +112,7 @@ describe('ShoppingListDetailPage', () => {
     )
 
     expect(await screen.findByRole('heading', { name: 'Avprickade varor' })).toBeInTheDocument()
+    expect(screen.getByText('Att handla som Anna')).toBeInTheDocument()
     expect(screen.getByText('Tomater')).toBeInTheDocument()
     expect(screen.getByText('Mjolk')).toBeInTheDocument()
 

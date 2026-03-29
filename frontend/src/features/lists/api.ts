@@ -33,6 +33,13 @@ export function renameList(actorName: string, listId: string, name: string) {
   })
 }
 
+export function archiveList(actorName: string, listId: string) {
+  return apiRequest<ShoppingListOverview>(`/api/lists/${listId}/archive`, {
+    method: 'POST',
+    actorName,
+  })
+}
+
 export function fetchList(listId: string) {
   return apiRequest<ShoppingListDetail>(`/api/lists/${listId}`)
 }

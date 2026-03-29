@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { fetchStats } from './api'
 import { HomeViewSwitch } from './HomeViewSwitch'
 import { useActorName } from '../actor/useActorName'
+import { toTitledName } from '../../shared/displayName'
 import type { ShoppingStats } from '../../shared/types/api'
 import '../../components/ui/ui.css'
 
@@ -121,7 +122,7 @@ export function ShoppingStatsPage() {
       <header className="app-header app-header-home">
         <div className="app-header__title app-header__title--left">
           <span className="app-header__eyebrow">Mina listor</span>
-          <strong>{actorName}</strong>
+          <strong>{toTitledName(actorName)}</strong>
         </div>
         <button className="header-action" onClick={() => void loadStats(range)} type="button">
           Uppdatera

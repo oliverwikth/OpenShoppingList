@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import type { CSSProperties, FormEvent } from 'react'
+import type { CSSProperties, FormEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react'
+import { Trash2 } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
-import { createList, fetchLists } from './api'
+import { archiveList, createList, fetchLists } from './api'
 import { HomeViewSwitch } from './HomeViewSwitch'
 import { useActorName } from '../actor/useActorName'
-import type { ShoppingListOverviewPage } from '../../shared/types/api'
+import { toTitledName } from '../../shared/displayName'
+import type { ShoppingListOverview, ShoppingListOverviewPage } from '../../shared/types/api'
 import '../../components/ui/ui.css'
 
 type ListPageSize = 5 | 10 | 20 | 'all'
@@ -34,8 +36,11 @@ export function ListsOverviewPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [isArchiving, setIsArchiving] = useState(false)
   const [keyboardInset, setKeyboardInset] = useState(0)
   const [error, setError] = useState<string | null>(null)
+  const [archiveError, setArchiveError] = useState<string | null>(null)
+  const [pendingArchiveList, setPendingArchiveList] = useState<ShoppingListOverview | null>(null)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState<ListPageSize>(5)
   const newListInputRef = useRef<HTMLInputElement | null>(null)
@@ -146,10 +151,43 @@ export function ListsOverviewPage() {
     setNewListName(getDefaultListTitle())
   }
 
+  function openArchiveDialog(list: ShoppingListOverview) {
+    setArchiveError(null)
+    setPendingArchiveList(list)
+  }
+
+  function closeArchiveDialog() {
+    if (isArchiving) {
+      return
+    }
+
+    setArchiveError(null)
+    setPendingArchiveList(null)
+  }
+
   function changePageSize(nextPageSize: ListPageSize) {
     setListPage(null)
     setPageSize(nextPageSize)
     setPage(1)
+  }
+
+  async function handleArchiveList() {
+    if (!pendingArchiveList) {
+      return
+    }
+
+    setIsArchiving(true)
+    setArchiveError(null)
+    setError(null)
+    try {
+      await archiveList(actorName, pendingArchiveList.id)
+      setListPage((currentPage) => removeArchivedListFromPage(currentPage, pendingArchiveList.id))
+      setPendingArchiveList(null)
+    } catch (archiveListError) {
+      setArchiveError(archiveListError instanceof Error ? archiveListError.message : 'Kunde inte arkivera listan.')
+    } finally {
+      setIsArchiving(false)
+    }
   }
 
   const lists = listPage?.items ?? []
@@ -162,7 +200,7 @@ export function ListsOverviewPage() {
       <header className="app-header app-header-home">
         <div className="app-header__title app-header__title--left">
           <span className="app-header__eyebrow">Mina listor</span>
-          <strong>{actorName}</strong>
+          <strong>{toTitledName(actorName)}</strong>
         </div>
         <button aria-label="Skapa ny lista" className="header-plus" onClick={openCreateDialog} type="button">
           +
@@ -207,20 +245,13 @@ export function ListsOverviewPage() {
           {!isLoading && lists.length === 0 ? <p className="empty-panel">Inga listor än. Tryck på plus för att skapa den första.</p> : null}
           <div className="list-stack">
             {lists.map((list) => (
-              <Link className="household-list-card household-list-card--minimal" key={list.id} to={`/${actorName}/lists/${list.id}/varor`}>
-                <div>
-                  <strong className="household-list-card__title">{list.name}</strong>
-                  <p className="household-list-card__meta">Senast av {list.lastModifiedByDisplayName}</p>
-                </div>
-                <div className="household-list-card__aside">
-                  <span className="summary-pill">
-                    {list.checkedItemCount}/{list.itemCount}
-                  </span>
-                  <span className={`status-pill ${list.status === 'ACTIVE' ? 'is-live' : ''}`}>
-                    {list.status === 'ACTIVE' ? 'Aktiv' : 'Arkiverad'}
-                  </span>
-                </div>
-              </Link>
+              <SwipeableListCard
+                actorName={actorName}
+                disabled={isArchiving}
+                key={list.id}
+                list={list}
+                onRequestArchive={openArchiveDialog}
+              />
             ))}
           </div>
 
@@ -276,7 +307,164 @@ export function ListsOverviewPage() {
           </form>
         </div>
       ) : null}
+
+      {pendingArchiveList ? (
+        <div aria-modal="true" className="modal-backdrop" role="dialog">
+          <div className="modal-card inline-form modal-card--compact">
+            <div className="modal-header">
+              <h2>Ta bort lista?</h2>
+              <button aria-label="Stäng" className="modal-close" disabled={isArchiving} onClick={closeArchiveDialog} type="button">
+                ×
+              </button>
+            </div>
+            <p className="modal-copy">
+              {pendingArchiveList.name} tas bort från översikten och arkiveras.
+            </p>
+            {archiveError ? <div className="info-banner">{archiveError}</div> : null}
+            <div className="modal-actions">
+              <button className="secondary-pill" disabled={isArchiving} onClick={closeArchiveDialog} type="button">
+                Avbryt
+              </button>
+              <button className="danger-pill" disabled={isArchiving} onClick={() => void handleArchiveList()} type="button">
+                {isArchiving ? 'Tar bort...' : 'Ja, ta bort'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
+  )
+}
+
+interface SwipeableListCardProps {
+  actorName: string
+  disabled: boolean
+  list: ShoppingListOverview
+  onRequestArchive: (list: ShoppingListOverview) => void
+}
+
+function SwipeableListCard({ actorName, disabled, list, onRequestArchive }: SwipeableListCardProps) {
+  const [swipeOffset, setSwipeOffset] = useState(0)
+  const swipeStartXRef = useRef<number | null>(null)
+  const swipeStartYRef = useRef<number | null>(null)
+  const isSwipingRef = useRef(false)
+  const suppressClickRef = useRef(false)
+
+  function resetSwipe() {
+    swipeStartXRef.current = null
+    swipeStartYRef.current = null
+    isSwipingRef.current = false
+    setSwipeOffset(0)
+  }
+
+  function handlePointerDown(event: ReactPointerEvent<HTMLElement>) {
+    if (disabled) {
+      return
+    }
+
+    const target = event.target
+    if (target instanceof HTMLElement && target.closest('button')) {
+      return
+    }
+
+    swipeStartXRef.current = event.clientX
+    swipeStartYRef.current = event.clientY
+    isSwipingRef.current = false
+    suppressClickRef.current = false
+  }
+
+  function handlePointerMove(event: ReactPointerEvent<HTMLElement>) {
+    if (swipeStartXRef.current === null || swipeStartYRef.current === null) {
+      return
+    }
+
+    const deltaX = event.clientX - swipeStartXRef.current
+    const deltaY = event.clientY - swipeStartYRef.current
+
+    if (!isSwipingRef.current && Math.abs(deltaY) > 10 && Math.abs(deltaY) > Math.abs(deltaX)) {
+      resetSwipe()
+      return
+    }
+
+    if (deltaX < -8 && Math.abs(deltaX) > Math.abs(deltaY) + 6) {
+      isSwipingRef.current = true
+      suppressClickRef.current = true
+    }
+
+    if (!isSwipingRef.current) {
+      return
+    }
+
+    setSwipeOffset(Math.max(deltaX, -112))
+  }
+
+  function handlePointerCancel() {
+    resetSwipe()
+  }
+
+  function handlePointerLeave() {
+    if (!isSwipingRef.current) {
+      return
+    }
+
+    resetSwipe()
+  }
+
+  function handlePointerUp(event: ReactPointerEvent<HTMLElement>) {
+    if (swipeStartXRef.current === null || swipeStartYRef.current === null) {
+      return
+    }
+
+    const deltaX = event.clientX - swipeStartXRef.current
+    const deltaY = event.clientY - swipeStartYRef.current
+    const shouldArchive = isSwipingRef.current && deltaX <= -88 && Math.abs(deltaX) > Math.abs(deltaY)
+
+    resetSwipe()
+
+    if (shouldArchive) {
+      onRequestArchive(list)
+    }
+  }
+
+  function handleClick(event: ReactMouseEvent<HTMLAnchorElement>) {
+    if (!suppressClickRef.current) {
+      return
+    }
+
+    event.preventDefault()
+    suppressClickRef.current = false
+  }
+
+  return (
+    <div className="list-swipe-card">
+      <div aria-hidden="true" className="list-swipe-card__action">
+        <Trash2 size={20} strokeWidth={2.25} />
+      </div>
+      <Link
+        className="household-list-card household-list-card--minimal list-swipe-card__content"
+        onClick={(event) => handleClick(event)}
+        onPointerCancel={handlePointerCancel}
+        onPointerDown={handlePointerDown}
+        onPointerLeave={handlePointerLeave}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        style={{ transform: swipeOffset ? `translateX(${swipeOffset}px)` : undefined }}
+        to={`/${actorName}/lists/${list.id}/varor`}
+      >
+        <div>
+          <strong className="household-list-card__title">{list.name}</strong>
+          <p className="household-list-card__meta">Senast av {toTitledName(list.lastModifiedByDisplayName)}</p>
+        </div>
+        <div className="household-list-card__aside">
+          <span className="summary-pill">
+            {list.checkedItemCount}/{list.itemCount}
+          </span>
+          <span className={`status-pill ${list.status === 'ACTIVE' ? 'is-live' : ''}`}>
+            {list.status === 'ACTIVE' ? 'Aktiv' : 'Arkiverad'}
+          </span>
+        </div>
+      </Link>
+    </div>
   )
 }
 
@@ -287,4 +475,29 @@ function parsePageSize(rawValue: string): ListPageSize {
 
   const parsed = Number.parseInt(rawValue, 10)
   return parsed === 10 || parsed === 20 ? parsed : 5
+}
+
+function removeArchivedListFromPage(currentPage: ShoppingListOverviewPage | null, listId: string) {
+  if (!currentPage) {
+    return currentPage
+  }
+
+  const items = currentPage.items.filter((item) => item.id !== listId)
+  if (items.length === currentPage.items.length) {
+    return currentPage
+  }
+
+  const totalItems = Math.max(0, currentPage.totalItems - 1)
+  const totalPages = Math.max(1, Math.ceil(totalItems / currentPage.pageSize))
+  const page = Math.min(currentPage.page, totalPages)
+
+  return {
+    ...currentPage,
+    items,
+    totalItems,
+    totalPages,
+    page,
+    hasPreviousPage: page > 1,
+    hasNextPage: items.length < totalItems,
+  }
 }

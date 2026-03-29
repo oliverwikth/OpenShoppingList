@@ -79,7 +79,9 @@ describe('ListsOverviewPage', () => {
     )
 
     expect(await screen.findByRole('heading', { name: 'Alla listor' })).toBeInTheDocument()
+    expect(screen.getByText('Anna')).toBeInTheDocument()
     expect(await screen.findByText('Veckohandling')).toBeInTheDocument()
+    expect(screen.getByText('Senast av Anna')).toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledWith('/api/lists?page=1&pageSize=5', expect.any(Object))
 
     fireEvent.click(screen.getByRole('button', { name: 'Skapa ny lista' }))
@@ -253,6 +255,99 @@ describe('ListsOverviewPage', () => {
     expect(screen.queryByRole('button', { name: 'Visa fler' })).not.toBeInTheDocument()
   })
 
+  it('archives a list after swiping left and confirming removal', async () => {
+    const user = userEvent.setup()
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          items: [
+            {
+              id: 'list-1',
+              name: 'Veckohandling',
+              status: 'ACTIVE',
+              itemCount: 2,
+              checkedItemCount: 1,
+              updatedAt: '2026-03-26T18:00:00Z',
+              lastModifiedByDisplayName: 'anna',
+            },
+            {
+              id: 'list-2',
+              name: 'Helgmiddag',
+              status: 'ACTIVE',
+              itemCount: 4,
+              checkedItemCount: 0,
+              updatedAt: '2026-03-27T18:00:00Z',
+              lastModifiedByDisplayName: 'anna',
+            },
+          ],
+          page: 1,
+          pageSize: 5,
+          totalItems: 2,
+          totalPages: 1,
+          hasPreviousPage: false,
+          hasNextPage: false,
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          id: 'list-1',
+          name: 'Veckohandling',
+          status: 'ARCHIVED',
+          itemCount: 2,
+          checkedItemCount: 1,
+          updatedAt: '2026-03-26T18:00:00Z',
+          lastModifiedByDisplayName: 'anna',
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
+
+    render(
+      <MemoryRouter initialEntries={['/anna']}>
+        <AppShell />
+      </MemoryRouter>,
+    )
+
+    const archivedList = await screen.findByText('Veckohandling')
+    expect(screen.getByText('Helgmiddag')).toBeInTheDocument()
+
+    const archivedCard = archivedList.closest('a')
+    expect(archivedCard).not.toBeNull()
+
+    fireEvent.pointerDown(archivedCard!, { clientX: 240, clientY: 100 })
+    fireEvent.pointerMove(archivedCard!, { clientX: 120, clientY: 104 })
+    fireEvent.pointerUp(archivedCard!, { clientX: 120, clientY: 104 })
+
+    expect(screen.getByRole('heading', { name: 'Ta bort lista?' })).toBeInTheDocument()
+    expect(screen.getByText('Veckohandling tas bort från översikten och arkiveras.')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Ja, ta bort' }))
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/lists/list-1/archive',
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({
+            'X-Actor-Display-Name': 'anna',
+          }),
+        }),
+      )
+    })
+
+    await waitFor(() => {
+      expect(screen.queryByText('Veckohandling')).not.toBeInTheDocument()
+    })
+    expect(screen.getByText('Helgmiddag')).toBeInTheDocument()
+    expect(screen.getByText('Visar 1 av 1')).toBeInTheDocument()
+  })
+
   it('loads the statistics page and lets the user switch ranges', async () => {
     const user = userEvent.setup()
     const fetchMock = vi.spyOn(globalThis, 'fetch')
@@ -326,6 +421,7 @@ describe('ListsOverviewPage', () => {
     )
 
     expect(await screen.findByText('Din shopping i siffror')).toBeInTheDocument()
+    expect(screen.getByText('Anna')).toBeInTheDocument()
     expect(screen.getByText('Tortillabröd')).toBeInTheDocument()
     expect(container.querySelector('img[src="https://example.com/tortilla.jpg"]')).not.toBeNull()
     expect(screen.getByRole('link', { name: 'Alla listor' })).toHaveAttribute('href', '/anna')

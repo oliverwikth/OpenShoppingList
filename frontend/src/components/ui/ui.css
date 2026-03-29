@@ -920,8 +920,22 @@
   color: var(--text);
 }
 
+.danger-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 20px;
+  background: #d63f50;
+  color: white;
+  font-weight: 800;
+}
+
 .primary-pill:disabled,
 .secondary-pill:disabled,
+.danger-pill:disabled,
 .circle-action:disabled,
 .square-check:disabled,
 .bottom-tab:disabled {
@@ -986,6 +1000,36 @@
   display: grid;
   justify-items: end;
   gap: 8px;
+}
+
+.list-swipe-card {
+  position: relative;
+  overflow: hidden;
+  border-bottom: 1px solid var(--line);
+}
+
+.list-swipe-card__action {
+  position: absolute;
+  inset: 0 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 124px;
+  padding: 0 16px;
+  background: linear-gradient(180deg, #ee5d68 0%, #d63f50 100%);
+  color: white;
+}
+
+.list-swipe-card__content {
+  position: relative;
+  z-index: 1;
+  touch-action: pan-y;
+  transition: transform 160ms ease;
+  will-change: transform;
+}
+
+.list-swipe-card__content.household-list-card--minimal {
+  border-bottom: 0;
 }
 
 .catalog-row {
@@ -1313,6 +1357,10 @@
   overflow: auto;
 }
 
+.modal-card--compact {
+  max-width: 420px;
+}
+
 .modal-header {
   display: flex;
   align-items: center;
@@ -1334,6 +1382,21 @@
   color: var(--text);
   font-size: 1.6rem;
   line-height: 1;
+}
+
+.modal-copy {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.modal-actions > * {
+  flex: 1 1 0;
 }
 
 .bottom-tabs {

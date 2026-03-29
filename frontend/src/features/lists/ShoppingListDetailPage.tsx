@@ -2,6 +2,7 @@ import { useDeferredValue, useEffect, useEffectEvent, useLayoutEffect, useMemo, 
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useActorName } from '../actor/useActorName'
+import { toTitledName } from '../../shared/displayName'
 import { addExternalItem, addManualItem, adjustItemQuantity, checkItem, fetchList, toggleItemClaim, uncheckItem } from './api'
 import { openListRealtimeSocket, shouldUseRealtimeSocket } from './realtime'
 import { searchRetailer } from '../retailer-search/api'
@@ -818,7 +819,7 @@ export function ShoppingListDetailPage() {
           ←
         </Link>
         <div className="app-header__title">
-          <span className="app-header__eyebrow">Att handla som {actorName}</span>
+          <span className="app-header__eyebrow">Att handla som {toTitledName(actorName)}</span>
           <strong>{list?.name ?? 'Hämtar lista...'}</strong>
         </div>
         <button
@@ -1453,14 +1454,6 @@ function claimPaletteStyle(displayName: string): CSSProperties {
     '--claim-border': `hsla(${hue}, 48%, 48%, 0.45)`,
     '--claim-text': `hsl(${hue}, 48%, 28%)`,
   } as CSSProperties
-}
-
-function toTitledName(displayName: string) {
-  if (!displayName) {
-    return displayName
-  }
-
-  return displayName.charAt(0).toLocaleUpperCase('sv-SE') + displayName.slice(1)
 }
 
 function resolveSearchPage(view: ViewMode, searchParams: URLSearchParams) {
