@@ -1,47 +1,34 @@
 import { useDeferredValue, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useActorName } from '../actor/useActorName'
 import { toTitledName } from '../../shared/displayName'
 import { addExternalItem, addManualItem, adjustItemQuantity, checkItem, fetchList, toggleItemClaim, uncheckItem } from './api'
 import { openListRealtimeSocket, shouldUseRealtimeSocket } from './realtime'
 import { searchRetailer } from '../retailer-search/api'
-import type {
-  RetailerSearchResponse,
-  RetailerSearchResult,
-  ShoppingListDetail,
-  ShoppingListItem,
-} from '../../shared/types/api'
+import type { RetailerSearchResponse, RetailerSearchResult, ShoppingListDetail, ShoppingListItem } from '../../shared/types/api'
+import { ChecklistPanel } from './detail/ChecklistPanel'
+import {
+  calculatePricedItemsTotal,
+  claimActionKey,
+  compareItemsByCreatedAt,
+  externalSearchKey,
+  findMatchingExternalSearchItem,
+  findMatchingManualSearchItem,
+  groupItems,
+  labelForView,
+  manualSearchKey,
+  resolveSearchPage,
+  resolveView,
+  ROOT_VIEW_ORDER,
+  searchSelectionQuantity,
+  type PendingSearchAdd,
+  type SearchResultsState,
+  type ViewMode,
+  upsertListItem,
+  viewPath,
+} from './detail/detailPageUtils'
+import { SearchResultsPanel, VarorItemsPanel } from './detail/VarorPanels'
 import '../../components/ui/ui.css'
-
-type ViewMode = 'items' | 'search' | 'search-expanded' | 'checklist'
-
-interface ItemGroup {
-  title: string
-  items: ShoppingListItem[]
-}
-
-interface SearchResultsState {
-  query: string
-  pages: Record<number, RetailerSearchResponse>
-}
-
-interface PendingManualSearchAdd {
-  kind: 'manual'
-  note: string
-  quantity: number
-  title: string
-}
-
-interface PendingExternalSearchAdd {
-  kind: 'external'
-  quantity: number
-  result: RetailerSearchResult
-}
-
-type PendingSearchAdd = PendingManualSearchAdd | PendingExternalSearchAdd
-
-const ROOT_VIEW_ORDER: Exclude<ViewMode, 'search'>[] = ['items', 'checklist']
 const VAROR_ADJUSTMENT_DEBOUNCE_MS = 600
 const SEARCH_ADD_DEBOUNCE_MS = 600
 
@@ -704,6 +691,13 @@ export function ShoppingListDetailPage() {
     setSearchParams(nextSearchParams, { replace: true })
   }
 
+  function clearSearch() {
+    updateSearchValue('')
+    searchResultsStateRef.current = { query: '', pages: {} }
+    setSearchResultsState({ query: '', pages: {} })
+    searchInputRef.current?.focus()
+  }
+
   function handleSearchFieldFocus() {
     if (currentView !== 'items') {
       return
@@ -862,12 +856,7 @@ export function ShoppingListDetailPage() {
                         <button
                           aria-label="Rensa sökning"
                           className="search-clear"
-                          onClick={() => {
-                            updateSearchValue('')
-                            searchResultsStateRef.current = { query: '', pages: {} }
-                            setSearchResultsState({ query: '', pages: {} })
-                            searchInputRef.current?.focus()
-                          }}
+                          onClick={clearSearch}
                           type="button"
                         >
                           ×
@@ -877,189 +866,45 @@ export function ShoppingListDetailPage() {
                   </div>
                 </section>
 
-                {currentView === 'items' ? (
-                  <>
-                    {itemsInOrder.length === 0 ? <p className="empty-panel">Listan är tom än. Börja skriva i sökfältet för att lägga till dina första varor.</p> : null}
-
-                    {itemsInOrder.length > 0 ? (
-                      <>
-                        <div className="catalog-list catalog-list--panel">
-                          {itemsInOrder.map((item) => (
-                            <article className="catalog-row catalog-row--minimal" key={item.id}>
-                              <div className="catalog-row__media">{renderItemMedia(item)}</div>
-                              <div className="catalog-row__content">
-                                <strong>{item.title}</strong>
-                                <div className="catalog-row__meta">
-                                  <span>{itemSubtitle(item)}</span>
-                                  {priceLabelsForItem(item).map((label) => (
-                                    <span key={`${item.id}:${label}`}>{label}</span>
-                                  ))}
-                                </div>
-                              </div>
-                              <div className="catalog-row__aside catalog-row__aside--stack">
-                                <QuantityAction
-                                  count={item.quantity}
-                                  isPending={false}
-                                  onDecrease={() => handleDecreaseItemFromVaror(item)}
-                                  onIncrease={() => handleIncreaseItemFromVaror(item)}
-                                  title={item.title}
-                                />
-                              </div>
-                            </article>
-                          ))}
-                        </div>
-
-                        <section className="total-bar" aria-label="Totalpris">
-                          <span>Total</span>
-                          <strong>{formatPrice(pricedItemsTotal.amount, pricedItemsTotal.currency)}</strong>
-                        </section>
-                      </>
-                    ) : null}
-                  </>
-                ) : null}
-
                 {isSearchView ? (
-                  <div className="search-results-panel">
-                    <div className="catalog-list catalog-list--search">
-                      {manualSearchLabel ? (
-                        <article className="catalog-row" key="manual-search-item">
-                          <div className="catalog-row__media catalog-row__media--brand">TXT</div>
-                          <div className="catalog-row__content">
-                            <strong>{manualSearchLabel}</strong>
-                            <p>Fritextartikel</p>
-                          </div>
-                          <div className="catalog-row__aside">
-                            <QuantityAction
-                              count={manualSearchQuantity}
-                              isPending={busySearchActionKeys[manualSearchActionKey] === true}
-                              onDecrease={manualSearchQuantity > 0 ? handleDecreaseManualFromSearch : undefined}
-                              onIncrease={handleAddManualFromSearch}
-                              title={manualSearchLabel}
-                            />
-                          </div>
-                        </article>
-                      ) : null}
-
-                      {isSearching ? <p className="empty-state">Söker...</p> : null}
-                      {searchResponse?.available === false && searchResponse.message ? <div className="info-banner">{searchResponse.message}</div> : null}
-                      {!isSearching && searchInput.trim().length < 2 ? (
-                        <p className="empty-state">Skriv minst två tecken för att söka artiklar.</p>
-                      ) : null}
-                      {!isSearching && searchInput.trim().length >= 2 && searchResponse !== null && !searchResponse.results.length ? (
-                        <p className="empty-state">Inga butiksträffar just nu. Lägg till som fritext i stället.</p>
-                      ) : null}
-
-                      <div className="catalog-list">
-                        {searchResults.map((result) => {
-                          const matchingItem = findMatchingExternalSearchItem(list?.items ?? [], result)
-                          const quantity = searchSelectionQuantity(matchingItem, pendingSearchAdds[externalSearchKey(result)])
-
-                          return (
-                            <article className="catalog-row" key={result.articleId}>
-                              <div className="catalog-row__media">{renderSearchMedia(result)}</div>
-                              <div className="catalog-row__content">
-                                <strong>{result.title}</strong>
-                                <p>{result.subtitle ?? result.category ?? 'Butiksartikel'}</p>
-                                <div className="catalog-row__meta">
-                                  {result.category ? <span>{result.category}</span> : null}
-                                  {priceLabelsForSearchResult(result).map((label) => (
-                                    <span key={`${result.articleId}:${label}`}>{label}</span>
-                                  ))}
-                                </div>
-                              </div>
-                              <div className="catalog-row__aside">
-                                <QuantityAction
-                                  count={quantity}
-                                  isPending={busySearchActionKeys[externalSearchKey(result)] === true}
-                                  onDecrease={quantity > 0 ? () => void handleDecreaseRetailerItemFromSearch(result, matchingItem) : undefined}
-                                  onIncrease={() => void handleAddRetailerItem(result)}
-                                  title={result.title}
-                                />
-                              </div>
-                            </article>
-                          )
-                        })}
-                      </div>
-
-                      {searchResponse?.hasMoreResults ? (
-                        <button
-                          aria-label="Visa fler träffar"
-                          className="search-expand"
-                          onClick={() =>
-                            navigate(viewPath(actorName, listId, 'search-expanded', searchInput, currentSearchPage + 1))
-                          }
-                          type="button"
-                        >
-                          <span className="search-expand__icon">↓</span>
-                          <span>Visa fler träffar</span>
-                        </button>
-                      ) : null}
-                    </div>
-                  </div>
-                ) : null}
+                  <SearchResultsPanel
+                    busySearchActionKeys={busySearchActionKeys}
+                    isSearching={isSearching}
+                    items={list.items}
+                    manualSearchActionKey={manualSearchActionKey}
+                    manualSearchLabel={manualSearchLabel}
+                    manualSearchQuantity={manualSearchQuantity}
+                    pendingSearchAdds={pendingSearchAdds}
+                    searchInput={searchInput}
+                    searchResponse={searchResponse}
+                    searchResults={searchResults}
+                    onAddManual={handleAddManualFromSearch}
+                    onAddRetailerItem={handleAddRetailerItem}
+                    onDecreaseManual={handleDecreaseManualFromSearch}
+                    onDecreaseRetailerItem={handleDecreaseRetailerItemFromSearch}
+                    onShowMore={() => navigate(viewPath(actorName, listId, 'search-expanded', searchInput, currentSearchPage + 1))}
+                  />
+                ) : (
+                  <VarorItemsPanel
+                    itemsInOrder={itemsInOrder}
+                    pricedItemsTotal={pricedItemsTotal}
+                    onDecreaseItem={handleDecreaseItemFromVaror}
+                    onIncreaseItem={handleIncreaseItemFromVaror}
+                  />
+                )}
               </section>
             ) : null}
 
             {currentView === 'checklist' ? (
-              <section className="checklist-screen">
-                <div className="checklist-summary">
-                  <strong>
-                    {checkedCount} av {totalQuantity} klara
-                  </strong>
-                </div>
-
-                {list.items.length === 0 ? (
-                  <section className="checklist-section">
-                    <p className="empty-state">Inga rader att pricka av än. Lägg till varor i sökvyn först.</p>
-                  </section>
-                ) : null}
-
-                {uncheckedChecklistGroups.map((group) => (
-                  <section className="checklist-section" key={group.title}>
-                    <h2 className="checklist-section__title">{group.title}</h2>
-                    <div className="checklist-list">
-                      {group.items.map((item) => (
-                        <ChecklistItemRow
-                          isBusy={pendingActionKey === item.id || pendingActionKey === claimActionKey(item.id)}
-                          item={item}
-                          key={item.id}
-                          onToggleCheck={handleToggleItem}
-                          onToggleClaim={handleToggleClaim}
-                        />
-                      ))}
-                    </div>
-                  </section>
-                ))}
-
-                {checkedChecklistItems.length > 0 ? (
-                  <section className="checklist-section checklist-section--checked">
-                    <h2 className="checklist-section__title">Avprickade varor</h2>
-                    <div className="checklist-list">
-                      {checkedChecklistItems.map((item) => (
-                        <article className="checklist-row checklist-row--minimal is-checked" key={item.id}>
-                          <button
-                            aria-label={`Avmarkera ${item.title}`}
-                            className="square-check is-checked"
-                            disabled={pendingActionKey === item.id}
-                            onClick={() => void handleToggleItem(item)}
-                            type="button"
-                          >
-                            ✓
-                          </button>
-                          <div className="catalog-row__media">{renderItemMedia(item)}</div>
-                          <div className="catalog-row__content">
-                            <strong>{item.title}</strong>
-                            {itemSubtitle(item) ? <p>{itemSubtitle(item)}</p> : null}
-                          </div>
-                          <div className="catalog-row__aside">
-                            <span className="checklist-quantity">{formatQuantity(item.quantity)}</span>
-                          </div>
-                        </article>
-                      ))}
-                    </div>
-                  </section>
-                ) : null}
-              </section>
+              <ChecklistPanel
+                checkedChecklistItems={checkedChecklistItems}
+                checkedCount={checkedCount}
+                pendingActionKey={pendingActionKey}
+                totalQuantity={totalQuantity}
+                uncheckedChecklistGroups={uncheckedChecklistGroups}
+                onToggleCheck={handleToggleItem}
+                onToggleClaim={handleToggleClaim}
+              />
             ) : null}
           </>
         ) : null}
@@ -1079,464 +924,4 @@ export function ShoppingListDetailPage() {
       </nav>
     </main>
   )
-}
-
-interface ChecklistItemRowProps {
-  isBusy: boolean
-  item: ShoppingListItem
-  onToggleCheck: (item: ShoppingListItem) => Promise<void>
-  onToggleClaim: (item: ShoppingListItem) => Promise<void>
-}
-
-function ChecklistItemRow({ isBusy, item, onToggleCheck, onToggleClaim }: ChecklistItemRowProps) {
-  const [swipeOffset, setSwipeOffset] = useState(0)
-  const swipeStartXRef = useRef<number | null>(null)
-  const isSwipingRef = useRef(false)
-  const claimDisplayName = item.claimedByDisplayName ? toTitledName(item.claimedByDisplayName) : null
-
-  const claimStyle = useMemo(() => {
-    if (!item.claimedByDisplayName) {
-      return undefined
-    }
-    return claimPaletteStyle(item.claimedByDisplayName)
-  }, [item.claimedByDisplayName])
-
-  function handlePointerDown(event: ReactPointerEvent<HTMLElement>) {
-    if (isBusy || item.checked) {
-      return
-    }
-
-    const target = event.target
-    if (target instanceof HTMLElement && target.closest('button')) {
-      return
-    }
-
-    swipeStartXRef.current = event.clientX
-    isSwipingRef.current = false
-  }
-
-  function handlePointerMove(event: ReactPointerEvent<HTMLElement>) {
-    if (swipeStartXRef.current === null) {
-      return
-    }
-
-    const deltaX = event.clientX - swipeStartXRef.current
-    if (deltaX < -6) {
-      isSwipingRef.current = true
-    }
-
-    if (!isSwipingRef.current) {
-      return
-    }
-
-    setSwipeOffset(Math.max(deltaX, -92))
-  }
-
-  function handlePointerLeave() {
-    if (swipeStartXRef.current === null) {
-      return
-    }
-
-    swipeStartXRef.current = null
-    isSwipingRef.current = false
-    setSwipeOffset(0)
-  }
-
-  async function handlePointerUp(event: ReactPointerEvent<HTMLElement>) {
-    if (swipeStartXRef.current === null) {
-      return
-    }
-
-    const deltaX = event.clientX - swipeStartXRef.current
-    swipeStartXRef.current = null
-    const shouldToggleClaim = deltaX <= -72
-    isSwipingRef.current = false
-    setSwipeOffset(0)
-
-    if (shouldToggleClaim) {
-      await onToggleClaim(item)
-    }
-  }
-
-  return (
-    <article
-      className={`checklist-row checklist-row--minimal checklist-row--claimable ${item.claimedByDisplayName ? 'is-claimed' : ''}`}
-      style={{
-        ...(claimStyle ?? {}),
-        transform: swipeOffset ? `translateX(${swipeOffset}px)` : undefined,
-      }}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerLeave={handlePointerLeave}
-      onPointerUp={(event) => void handlePointerUp(event)}
-    >
-      <button
-        aria-label={item.checked ? `Avmarkera ${item.title}` : `Markera ${item.title}`}
-        className={`square-check ${item.checked ? 'is-checked' : ''}`}
-        disabled={isBusy}
-        onClick={() => void onToggleCheck(item)}
-        type="button"
-      >
-        {item.checked ? '✓' : ''}
-      </button>
-      <div className="catalog-row__media">{renderItemMedia(item)}</div>
-      <div className="catalog-row__content">
-        <strong>{item.title}</strong>
-        {itemSubtitle(item) ? <p>{itemSubtitle(item)}</p> : null}
-        {claimDisplayName ? <p className="claim-label">{claimDisplayName} hämtar</p> : null}
-      </div>
-      <div className="catalog-row__aside">
-        <span className="checklist-quantity">{formatQuantity(item.quantity)}</span>
-      </div>
-    </article>
-  )
-}
-
-function renderItemMedia(item: ShoppingListItem) {
-  if (item.externalSnapshot?.imageUrl) {
-    return <img alt="" src={item.externalSnapshot.imageUrl} />
-  }
-
-  return <span>TXT</span>
-}
-
-function renderSearchMedia(result: RetailerSearchResult) {
-  if (result.imageUrl) {
-    return <img alt="" src={result.imageUrl} />
-  }
-
-  return <span>W</span>
-}
-
-interface QuantityActionProps {
-  count: number
-  isPending: boolean
-  onDecrease?: (() => void | Promise<void>) | undefined
-  onIncrease: () => void | Promise<void>
-  title: string
-}
-
-function QuantityAction({ count, isPending, onDecrease, onIncrease, title }: QuantityActionProps) {
-  if (count < 1 || !onDecrease) {
-    return (
-      <button
-        aria-label={`Lägg till ${title}`}
-        className="circle-action"
-        disabled={isPending}
-        onClick={() => void onIncrease()}
-        type="button"
-      >
-        {isPending ? '...' : '+'}
-      </button>
-    )
-  }
-
-  return (
-    <div className="quantity-stepper" role="group" aria-label={`Antal för ${title}`}>
-      <button
-        aria-label={`Minska ${title}`}
-        className="quantity-stepper__button"
-        disabled={isPending}
-        onClick={() => void onDecrease()}
-        type="button"
-      >
-        -
-      </button>
-      <span className="quantity-stepper__count">{count}</span>
-      <button
-        aria-label={`Öka ${title}`}
-        className="quantity-stepper__button"
-        disabled={isPending}
-        onClick={() => void onIncrease()}
-        type="button"
-      >
-        +
-      </button>
-    </div>
-  )
-}
-
-function labelForView(view: ViewMode) {
-  if (view === 'items') {
-    return 'Varor'
-  }
-
-  if (view === 'search' || view === 'search-expanded') {
-    return 'Sök'
-  }
-
-  return 'Checklista'
-}
-
-function resolveView(pathname: string): ViewMode {
-  if (pathname.endsWith('/varor/search/fler')) {
-    return 'search-expanded'
-  }
-
-  if (pathname.endsWith('/varor/search')) {
-    return 'search'
-  }
-
-  if (pathname.endsWith('/checklista')) {
-    return 'checklist'
-  }
-
-  return 'items'
-}
-
-function viewPath(actorName: string, listId: string, view: ViewMode, searchQuery = '', page?: number) {
-  const searchParams = new URLSearchParams()
-  if (searchQuery) {
-    searchParams.set('q', searchQuery)
-  }
-  if (page !== undefined && page > 0) {
-    searchParams.set('page', String(page))
-  }
-  const searchSuffix = searchParams.size > 0 ? `?${searchParams.toString()}` : ''
-
-  if (view === 'search-expanded') {
-    return `/${actorName}/lists/${listId}/varor/search/fler${searchSuffix}`
-  }
-
-  if (view === 'search') {
-    return `/${actorName}/lists/${listId}/varor/search${searchSuffix}`
-  }
-
-  if (view === 'checklist') {
-    return `/${actorName}/lists/${listId}/checklista`
-  }
-
-  return `/${actorName}/lists/${listId}/varor`
-}
-
-function claimActionKey(itemId: string) {
-  return `claim:${itemId}`
-}
-
-function upsertListItem(items: ShoppingListItem[], updatedItem: ShoppingListItem) {
-  const existingItemIndex = items.findIndex((item) => item.id === updatedItem.id)
-  if (existingItemIndex === -1) {
-    return [...items, updatedItem]
-  }
-
-  return items.map((item) => (item.id === updatedItem.id ? updatedItem : item))
-}
-
-function compareItemsByCreatedAt(left: ShoppingListItem, right: ShoppingListItem) {
-  const leftTimestamp = Date.parse(left.createdAt)
-  const rightTimestamp = Date.parse(right.createdAt)
-
-  if (Number.isFinite(leftTimestamp) && Number.isFinite(rightTimestamp) && leftTimestamp !== rightTimestamp) {
-    return leftTimestamp - rightTimestamp
-  }
-
-  if (left.position !== right.position) {
-    return left.position - right.position
-  }
-
-  return left.id.localeCompare(right.id)
-}
-
-function groupItems(items: ShoppingListItem[]): ItemGroup[] {
-  const grouped = new Map<string, ShoppingListItem[]>()
-
-  for (const item of items) {
-    const title = categoryTitle(item)
-    grouped.set(title, [...(grouped.get(title) ?? []), item])
-  }
-
-  return [...grouped.entries()]
-    .sort(([left], [right]) => compareGroupNames(left, right))
-    .map(([title, groupedItems]) => ({
-      title,
-      items: [...groupedItems].sort((left, right) => left.position - right.position),
-    }))
-}
-
-function categoryTitle(item: ShoppingListItem) {
-  if (item.externalSnapshot?.category?.trim()) {
-    return item.externalSnapshot.category
-  }
-
-  if (item.itemType === 'MANUAL') {
-    return 'Fritext'
-  }
-
-  return 'Övrigt'
-}
-
-function compareGroupNames(left: string, right: string) {
-  if (left === 'Fritext') {
-    return -1
-  }
-
-  if (right === 'Fritext') {
-    return 1
-  }
-
-  return left.localeCompare(right, 'sv')
-}
-
-function itemSubtitle(item: ShoppingListItem) {
-  if (item.manualNote?.trim()) {
-    return item.manualNote
-  }
-
-  if (item.externalSnapshot?.subtitle?.trim()) {
-    return item.externalSnapshot.subtitle
-  }
-
-  if (item.externalSnapshot?.category?.trim()) {
-    return item.externalSnapshot.category
-  }
-
-  return 'Delad hushållsrad'
-}
-
-function formatQuantity(quantity: number) {
-  return `${quantity} st`
-}
-
-function formatPrice(priceAmount: number, currency: string | null | undefined = 'SEK') {
-  return `${priceAmount.toFixed(2)} ${currency ?? 'SEK'}`
-}
-
-function priceLabelsForItem(item: ShoppingListItem) {
-  return priceLabelsForSource(item.externalSnapshot?.priceAmount, item.externalSnapshot?.currency, item.externalSnapshot?.pricing)
-}
-
-function priceLabelsForSearchResult(result: RetailerSearchResult) {
-  return priceLabelsForSource(result.priceAmount, result.currency, result.pricing)
-}
-
-function priceLabelsForSource(
-  priceAmount: number | null | undefined,
-  currency: string | null | undefined,
-  pricing: { unitPriceUnit: string | null; comparisonPriceAmount: number | null; comparisonPriceUnit: string | null } | null | undefined,
-) {
-  if (priceAmount === null || priceAmount === undefined) {
-    return []
-  }
-
-  const labels = [
-    formatUnitPrice(priceAmount, currency, pricing?.unitPriceUnit ?? null),
-    formatComparisonPrice(pricing?.comparisonPriceAmount ?? null, pricing?.comparisonPriceUnit ?? null, currency),
-  ].filter((label): label is string => Boolean(label))
-
-  return labels.filter((label, index) => labels.indexOf(label) === index)
-}
-
-function formatUnitPrice(priceAmount: number, currency: string | null | undefined, unit: string | null) {
-  const formattedPrice = formatPrice(priceAmount, currency)
-  const normalizedUnit = normalizePriceUnit(unit)
-  return normalizedUnit ? `${formattedPrice}/${normalizedUnit}` : formattedPrice
-}
-
-function formatComparisonPrice(
-  comparePriceAmount: number | null,
-  comparePriceUnit: string | null,
-  currency: string | null | undefined,
-) {
-  const unit = normalizePriceUnit(comparePriceUnit)
-  if (comparePriceAmount === null || unit === null) {
-    return null
-  }
-
-  return `${formatPrice(comparePriceAmount, currency)}/${unit}`
-}
-
-function calculatePricedItemsTotal(items: ShoppingListItem[]) {
-  const pricedItems = items.filter(
-    (item) => item.externalSnapshot?.priceAmount !== null && item.externalSnapshot?.priceAmount !== undefined,
-  )
-  const amount = pricedItems.reduce(
-    (sum, item) => sum + calculateEstimatedItemSpend(item),
-    0,
-  )
-  const currency = pricedItems.find((item) => item.externalSnapshot?.currency)?.externalSnapshot?.currency ?? 'SEK'
-  return { amount, currency }
-}
-
-function calculateEstimatedItemSpend(item: ShoppingListItem) {
-  const priceAmount = item.externalSnapshot?.priceAmount ?? 0
-  const assumedQuantityFactor = item.externalSnapshot?.pricing?.assumedQuantityFactor ?? 1
-  const quantityFactor = item.quantity * assumedQuantityFactor
-  return priceAmount * quantityFactor
-}
-
-function normalizePriceUnit(unit: string | null) {
-  if (!unit?.trim()) {
-    return null
-  }
-
-  const normalizedUnit = unit.trim().toLocaleLowerCase('sv-SE')
-  if (normalizedUnit.startsWith('kr/')) {
-    return normalizedUnit.slice(3)
-  }
-
-  return normalizedUnit
-}
-
-function findMatchingManualSearchItem(items: ShoppingListItem[], title: string) {
-  return (
-    items.find(
-      (item) =>
-        item.itemType === 'MANUAL' &&
-        item.title.trim().localeCompare(title.trim(), 'sv', { sensitivity: 'accent' }) === 0 &&
-        !item.manualNote?.trim(),
-    ) ?? null
-  )
-}
-
-function findMatchingExternalSearchItem(items: ShoppingListItem[], result: RetailerSearchResult) {
-  return (
-    items.find(
-      (item) =>
-        item.itemType === 'EXTERNAL_ARTICLE' &&
-        item.externalSnapshot?.provider === result.provider &&
-        item.externalSnapshot?.articleId === result.articleId,
-    ) ?? null
-  )
-}
-
-function manualSearchKey(title: string) {
-  return `manual:${title.trim().toLocaleLowerCase('sv-SE')}`
-}
-
-function externalSearchKey(result: RetailerSearchResult) {
-  return `external:${result.provider}:${result.articleId}`
-}
-
-function searchSelectionQuantity(item: ShoppingListItem | null, pendingAdd: PendingSearchAdd | undefined) {
-  return (item?.quantity ?? 0) + (pendingAdd?.quantity ?? 0)
-}
-
-function claimPaletteStyle(displayName: string): CSSProperties {
-  const hue = hashString(displayName) % 360
-  return {
-    '--claim-bg': `hsla(${hue}, 78%, 92%, 0.98)`,
-    '--claim-border': `hsla(${hue}, 48%, 48%, 0.45)`,
-    '--claim-text': `hsl(${hue}, 48%, 28%)`,
-  } as CSSProperties
-}
-
-function resolveSearchPage(view: ViewMode, searchParams: URLSearchParams) {
-  if (view !== 'search-expanded') {
-    return 0
-  }
-
-  const rawValue = Number(searchParams.get('page') ?? '1')
-  if (!Number.isFinite(rawValue) || rawValue < 1) {
-    return 1
-  }
-
-  return Math.floor(rawValue)
-}
-
-function hashString(value: string) {
-  let hash = 0
-  for (let index = 0; index < value.length; index += 1) {
-    hash = (hash * 31 + value.charCodeAt(index)) >>> 0
-  }
-  return hash
 }
