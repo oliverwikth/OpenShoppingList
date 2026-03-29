@@ -1469,14 +1469,6 @@ function isPerKilogramPrice(item: ShoppingListItem) {
   })
 }
 
-function isPerKilogramSearchResult(result: RetailerSearchResult) {
-  return hasPerKilogramUnit({
-    title: result.title,
-    subtitle: result.subtitle,
-    rawPayloadJson: result.rawPayloadJson,
-  })
-}
-
 function hasPerKilogramUnit(source: {
   title: string | null | undefined
   subtitle: string | null | undefined
