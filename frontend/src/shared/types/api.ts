@@ -192,3 +192,55 @@ export interface SettingsSnapshot {
   recentActivities: SettingsActivityPage
   errorLogs: AppErrorLogPage
 }
+
+export interface SettingsBackupExternalSnapshot {
+  provider: string
+  articleId: string
+  subtitle: string | null
+  imageUrl: string | null
+  category: string | null
+  priceAmount: number | null
+  currency: string | null
+  pricing: PricingDetails | null
+}
+
+export interface SettingsBackupItem {
+  id: string
+  itemType: ShoppingListItemType
+  title: string
+  checked: boolean
+  checkedAt: string | null
+  checkedByDisplayName: string | null
+  claimedAt: string | null
+  claimedByDisplayName: string | null
+  lastModifiedByDisplayName: string
+  createdAt: string
+  updatedAt: string
+  position: number
+  quantity: number
+  manualNote: string | null
+  externalSnapshot: SettingsBackupExternalSnapshot | null
+}
+
+export interface SettingsBackupList {
+  id: string
+  name: string
+  status: ShoppingListStatus
+  createdAt: string
+  updatedAt: string
+  archivedAt: string | null
+  lastModifiedByDisplayName: string
+  items: SettingsBackupItem[]
+}
+
+export interface SettingsBackup {
+  format: string
+  version: number
+  exportedAt: string
+  lists: SettingsBackupList[]
+}
+
+export interface SettingsBackupImportResult {
+  importedLists: number
+  importedItems: number
+}

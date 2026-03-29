@@ -1,9 +1,15 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { HomeViewSwitch } from '../lists/HomeViewSwitch'
 import { useActorName } from '../actor/useActorName'
-import { fetchSettingsSnapshot } from './api'
+import { exportSettingsBackup, fetchSettingsSnapshot, importSettingsBackup } from './api'
 import { toTitledName } from '../../shared/displayName'
-import type { AppErrorLogEntry, SettingsActivityEntry, SettingsSnapshot, ShoppingListOverview } from '../../shared/types/api'
+import type {
+  AppErrorLogEntry,
+  SettingsActivityEntry,
+  SettingsBackup,
+  SettingsSnapshot,
+  ShoppingListOverview,
+} from '../../shared/types/api'
 import '../../components/ui/ui.css'
 
 type SettingsPageSize = 2 | 5 | 10 | 20 | 50
@@ -22,9 +28,13 @@ export function SettingsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isLoadingMoreActivity, setIsLoadingMoreActivity] = useState(false)
   const [isLoadingMoreErrors, setIsLoadingMoreErrors] = useState(false)
+  const [isExportingBackup, setIsExportingBackup] = useState(false)
+  const [isImportingBackup, setIsImportingBackup] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [backupMessage, setBackupMessage] = useState<string | null>(null)
   const [activityPageSize, setActivityPageSize] = useState<SettingsPageSize>(2)
   const [errorPageSize, setErrorPageSize] = useState<SettingsPageSize>(2)
+  const importInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     void loadSettings(1, 1, activityPageSize, errorPageSize, 'replace')
@@ -40,6 +50,7 @@ export function SettingsPage() {
     if (mode === 'replace') {
       setIsLoading(true)
       setError(null)
+      setBackupMessage(null)
     } else if (mode === 'append-activities') {
       setIsLoadingMoreActivity(true)
     } else {
@@ -91,6 +102,51 @@ export function SettingsPage() {
             </div>
           </div>
           <p className="screen-subtitle">Se arkiverade listor, vem som gjort vad och fel som har loggats i appen.</p>
+        </section>
+
+        <section className="screen-card screen-card--minimal settings-section">
+          <div className="section-heading">
+            <div>
+              <span className="section-kicker">Backup</span>
+              <h2>Exportera och importera listor</h2>
+            </div>
+          </div>
+          <p className="screen-subtitle">
+            Exportera alla listor till en JSON-fil och importera samma fil igen vid migrering till en ny enhet. Import fungerar bara i en tom app.
+          </p>
+          {backupMessage ? <div className="info-banner">{backupMessage}</div> : null}
+          <div className="settings-backup-actions">
+            <button
+              className="header-action header-action--light"
+              disabled={isExportingBackup || isImportingBackup}
+              onClick={() => void handleExportBackup()}
+              type="button"
+            >
+              {isExportingBackup ? 'Exporterar...' : 'Exportera JSON'}
+            </button>
+            <button
+              className="header-action"
+              disabled={isExportingBackup || isImportingBackup}
+              onClick={() => importInputRef.current?.click()}
+              type="button"
+            >
+              {isImportingBackup ? 'Importerar...' : 'Importera JSON'}
+            </button>
+            <input
+              ref={importInputRef}
+              accept="application/json"
+              onChange={(event) => {
+                const file = event.target.files?.[0]
+                if (!file) {
+                  return
+                }
+                void handleImportBackup(file)
+                event.target.value = ''
+              }}
+              style={{ display: 'none' }}
+              type="file"
+            />
+          </div>
         </section>
 
         {isLoading ? <p className="empty-state">Hämtar inställningar...</p> : null}
@@ -201,6 +257,47 @@ export function SettingsPage() {
       </section>
     </main>
   )
+
+  async function handleExportBackup() {
+    setIsExportingBackup(true)
+    setError(null)
+    setBackupMessage(null)
+
+    try {
+      const backup = await exportSettingsBackup()
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' })
+      const objectUrl = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = objectUrl
+      link.download = backupFilename(backup)
+      document.body.append(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(objectUrl)
+      setBackupMessage(`Exporterade ${backup.lists.length} listor till JSON.`)
+    } catch (exportError) {
+      setError(exportError instanceof Error ? exportError.message : 'Kunde inte exportera backup.')
+    } finally {
+      setIsExportingBackup(false)
+    }
+  }
+
+  async function handleImportBackup(file: File) {
+    setIsImportingBackup(true)
+    setError(null)
+    setBackupMessage(null)
+
+    try {
+      const backup = JSON.parse(await readFileText(file)) as SettingsBackup
+      const result = await importSettingsBackup(backup)
+      await loadSettings(1, 1, activityPageSize, errorPageSize, 'replace')
+      setBackupMessage(`Importerade ${result.importedLists} listor och ${result.importedItems} rader.`)
+    } catch (importError) {
+      setError(importError instanceof Error ? importError.message : 'Kunde inte importera backup.')
+    } finally {
+      setIsImportingBackup(false)
+    }
+  }
 }
 
 function ArchivedListRow({ list }: { list: ShoppingListOverview }) {
@@ -426,4 +523,16 @@ function mergeSettingsSnapshot(
       items: [...current.errorLogs.items, ...incoming.errorLogs.items],
     },
   }
+}
+
+function backupFilename(backup: SettingsBackup) {
+  return `open-shopping-list-backup-${backup.exportedAt.replaceAll(':', '-')}.json`
+}
+
+async function readFileText(file: File) {
+  if (typeof file.text === 'function') {
+    return file.text()
+  }
+
+  return new Response(file).text()
 }

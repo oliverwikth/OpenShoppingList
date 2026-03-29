@@ -223,6 +223,157 @@ class ShoppingListApiIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void exportsAndImportsAllListsAsASingleBackupJson() throws Exception {
+        MvcResult activeListResult = mockMvc.perform(post("/api/lists")
+                        .header(ActorDisplayName.HEADER_NAME, "anna")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Veckohandling"}
+                                """))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        String activeListId = readId(activeListResult);
+
+        mockMvc.perform(post("/api/lists/{listId}/items/manual", activeListId)
+                        .header(ActorDisplayName.HEADER_NAME, "anna")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"title":"Mjölk","note":"Laktosfri","quantity":2}
+                                """))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/lists/{listId}/items/external", activeListId)
+                        .header(ActorDisplayName.HEADER_NAME, "anna")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "provider":"willys",
+                                  "articleId":"kaffe-1",
+                                  "title":"Bryggkaffe",
+                                  "subtitle":"500g",
+                                  "imageUrl":"https://example.com/coffee.jpg",
+                                  "category":"Kaffe",
+                                  "priceAmount":89.90,
+                                  "currency":"SEK",
+                                  "pricing":{
+                                    "unitPriceUnit":"st",
+                                    "comparisonPriceAmount":179.80,
+                                    "comparisonPriceUnit":"kg",
+                                    "assumedQuantityFactor":1
+                                  },
+                                  "quantity":1
+                                }
+                                """))
+                .andExpect(status().isOk());
+
+        MvcResult activeListDetails = mockMvc.perform(get("/api/lists/{listId}", activeListId))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        String checkedItemId = objectMapper.readTree(activeListDetails.getResponse().getContentAsString())
+                .path("items")
+                .path(1)
+                .path("id")
+                .asText();
+
+        mockMvc.perform(post("/api/lists/{listId}/items/{itemId}/check", activeListId, checkedItemId)
+                        .header(ActorDisplayName.HEADER_NAME, "anna"))
+                .andExpect(status().isOk());
+
+        MvcResult archivedListResult = mockMvc.perform(post("/api/lists")
+                        .header(ActorDisplayName.HEADER_NAME, "anna")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Helgmiddag"}
+                                """))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        String archivedListId = readId(archivedListResult);
+
+        mockMvc.perform(post("/api/lists/{listId}/items/manual", archivedListId)
+                        .header(ActorDisplayName.HEADER_NAME, "anna")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"title":"Bröd","note":"","quantity":1}
+                                """))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/lists/{listId}/archive", archivedListId)
+                        .header(ActorDisplayName.HEADER_NAME, "anna"))
+                .andExpect(status().isOk());
+
+        MvcResult backupResult = mockMvc.perform(get("/api/settings/backup"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.format").value("open-shopping-list-backup"))
+                .andExpect(jsonPath("$.version").value(1))
+                .andExpect(jsonPath("$.lists.length()").value(2))
+                .andExpect(jsonPath("$.lists[0].items.length()").value(org.hamcrest.Matchers.greaterThanOrEqualTo(1)))
+                .andReturn();
+
+        String backupJson = backupResult.getResponse().getContentAsString();
+
+        jdbcTemplate.execute("delete from app_error_log");
+        jdbcTemplate.execute("delete from item_activity_log");
+        jdbcTemplate.execute("delete from shopping_list_item");
+        jdbcTemplate.execute("delete from shopping_list");
+
+        mockMvc.perform(post("/api/settings/backup/import")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(backupJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.importedLists").value(2))
+                .andExpect(jsonPath("$.importedItems").value(3));
+
+        mockMvc.perform(get("/api/lists")
+                        .param("pageSize", "all"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].name").value("Veckohandling"));
+
+        mockMvc.perform(get("/api/lists/{listId}", activeListId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(2))
+                .andExpect(jsonPath("$.items[0].title").value("Mjölk"))
+                .andExpect(jsonPath("$.items[0].quantity").value(2))
+                .andExpect(jsonPath("$.items[1].title").value("Bryggkaffe"))
+                .andExpect(jsonPath("$.items[1].checked").value(true))
+                .andExpect(jsonPath("$.items[1].externalSnapshot.articleId").value("kaffe-1"))
+                .andExpect(jsonPath("$.items[1].externalSnapshot.pricing.comparisonPriceUnit").value("kg"));
+
+        mockMvc.perform(get("/api/settings"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.archivedLists.length()").value(1))
+                .andExpect(jsonPath("$.archivedLists[0].name").value("Helgmiddag"));
+    }
+
+    @Test
+    void rejectsBackupImportWhenListsAlreadyExist() throws Exception {
+        mockMvc.perform(post("/api/lists")
+                        .header(ActorDisplayName.HEADER_NAME, "anna")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Veckohandling"}
+                                """))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/settings/backup/import")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "format":"open-shopping-list-backup",
+                                  "version":1,
+                                  "exportedAt":"2026-03-29T12:00:00Z",
+                                  "lists":[]
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.message").value("Backup import requires an empty app. Remove existing lists before importing."));
+    }
+
+    @Test
     void ordersPaginatedListOverviewByCreatedTimeInsteadOfUpdatedTime() throws Exception {
         importWillysList("Att handla 18 januari 2025", LocalDate.parse("2025-01-18"), 10.0, "100-old_ST");
         importWillysList("Att handla 8 mars 2026", LocalDate.parse("2026-03-08"), 20.0, "100-new_ST");

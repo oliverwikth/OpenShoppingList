@@ -7,6 +7,54 @@ describe('SettingsPage', () => {
     vi.restoreAllMocks()
   })
 
+  it('exports all lists as a single backup json', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    const createObjectURL = vi.fn(() => 'blob:test-backup')
+    const revokeObjectURL = vi.fn()
+    Object.defineProperty(window.URL, 'createObjectURL', { value: createObjectURL, configurable: true })
+    Object.defineProperty(window.URL, 'revokeObjectURL', { value: revokeObjectURL, configurable: true })
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            archivedLists: [],
+            recentActivities: { items: [], page: 1, pageSize: 2, totalItems: 0, hasNextPage: false },
+            errorLogs: { items: [], page: 1, pageSize: 2, totalItems: 0, hasNextPage: false },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            format: 'open-shopping-list-backup',
+            version: 1,
+            exportedAt: '2026-03-29T11:10:00Z',
+            lists: [{ id: 'list-1', name: 'Veckohandling', status: 'ACTIVE', createdAt: '2026-03-29T10:00:00Z', updatedAt: '2026-03-29T10:00:00Z', archivedAt: null, lastModifiedByDisplayName: 'anna', items: [] }],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      )
+
+    render(
+      <MemoryRouter initialEntries={['/anna/installningar']}>
+        <AppShell />
+      </MemoryRouter>,
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Exportera JSON' }))
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith('/api/settings/backup', expect.any(Object))
+    })
+    expect(createObjectURL).toHaveBeenCalledTimes(1)
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:test-backup')
+    expect(clickSpy).toHaveBeenCalled()
+    expect(await screen.findByText('Exporterade 1 listor till JSON.')).toBeInTheDocument()
+  })
+
   it('loads archived lists, history and error logs', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
       new Response(
@@ -149,5 +197,91 @@ describe('SettingsPage', () => {
         expect.any(Object),
       )
     })
+  })
+
+  it('imports a backup json and reloads settings', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            archivedLists: [],
+            recentActivities: { items: [], page: 1, pageSize: 2, totalItems: 0, hasNextPage: false },
+            errorLogs: { items: [], page: 1, pageSize: 2, totalItems: 0, hasNextPage: false },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            importedLists: 1,
+            importedItems: 2,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            archivedLists: [],
+            recentActivities: { items: [], page: 1, pageSize: 2, totalItems: 0, hasNextPage: false },
+            errorLogs: { items: [], page: 1, pageSize: 2, totalItems: 0, hasNextPage: false },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      )
+
+    render(
+      <MemoryRouter initialEntries={['/anna/installningar']}>
+        <AppShell />
+      </MemoryRouter>,
+    )
+
+    await screen.findByRole('button', { name: 'Importera JSON' })
+    fireEvent.click(screen.getByRole('button', { name: 'Importera JSON' }))
+
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
+    const file = new File(
+      [
+        JSON.stringify({
+          format: 'open-shopping-list-backup',
+          version: 1,
+          exportedAt: '2026-03-29T11:10:00Z',
+          lists: [],
+        }),
+      ],
+      'backup.json',
+      { type: 'application/json' },
+    )
+    Object.defineProperty(file, 'text', {
+      value: () =>
+        Promise.resolve(
+          JSON.stringify({
+            format: 'open-shopping-list-backup',
+            version: 1,
+            exportedAt: '2026-03-29T11:10:00Z',
+            lists: [],
+          }),
+        ),
+    })
+    fireEvent.change(fileInput, { target: { files: [file] } })
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/settings/backup/import',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            format: 'open-shopping-list-backup',
+            version: 1,
+            exportedAt: '2026-03-29T11:10:00Z',
+            lists: [],
+          }),
+        }),
+      )
+    })
+    expect(await screen.findByText('Importerade 1 listor och 2 rader.')).toBeInTheDocument()
   })
 })

@@ -1047,6 +1047,16 @@
   gap: 10px;
 }
 
+.settings-backup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.settings-backup-actions .header-action {
+  min-width: 180px;
+}
+
 .settings-pagination {
   display: grid;
   justify-items: center;

@@ -93,6 +93,85 @@ public class ShoppingListItem {
     protected ShoppingListItem() {
     }
 
+    public static ShoppingListItem restoreManual(
+            ShoppingList shoppingList,
+            UUID id,
+            String title,
+            boolean checked,
+            Instant checkedAt,
+            String checkedByDisplayName,
+            Instant claimedAt,
+            String claimedByDisplayName,
+            String lastModifiedByDisplayName,
+            Instant createdAt,
+            Instant updatedAt,
+            int position,
+            int quantity,
+            String manualNote
+    ) {
+        ShoppingListItem item = new ShoppingListItem();
+        item.id = id == null ? UUID.randomUUID() : id;
+        item.shoppingList = shoppingList;
+        item.itemType = ShoppingListItemType.MANUAL;
+        item.title = normalizeTitle(title);
+        item.checked = checked;
+        item.checkedAt = checkedAt;
+        item.checkedByDisplayName = checkedByDisplayName;
+        item.claimedAt = claimedAt;
+        item.claimedByDisplayName = claimedByDisplayName;
+        item.lastModifiedByDisplayName = normalizeActor(lastModifiedByDisplayName);
+        item.createdAt = createdAt == null ? Instant.now() : createdAt;
+        item.updatedAt = updatedAt == null ? item.createdAt : updatedAt;
+        item.position = position;
+        item.quantity = normalizeQuantity(quantity);
+        item.manualNote = manualNote == null || manualNote.isBlank() ? null : manualNote.trim();
+        item.sourcePayloadJson = "{}";
+        return item;
+    }
+
+    public static ShoppingListItem restoreExternal(
+            ShoppingList shoppingList,
+            UUID id,
+            ExternalArticleSnapshot snapshot,
+            boolean checked,
+            Instant checkedAt,
+            String checkedByDisplayName,
+            Instant claimedAt,
+            String claimedByDisplayName,
+            String lastModifiedByDisplayName,
+            Instant createdAt,
+            Instant updatedAt,
+            int position,
+            int quantity
+    ) {
+        ShoppingListItem item = new ShoppingListItem();
+        item.id = id == null ? UUID.randomUUID() : id;
+        item.shoppingList = shoppingList;
+        item.itemType = ShoppingListItemType.EXTERNAL_ARTICLE;
+        item.title = normalizeTitle(snapshot.title());
+        item.checked = checked;
+        item.checkedAt = checkedAt;
+        item.checkedByDisplayName = checkedByDisplayName;
+        item.claimedAt = claimedAt;
+        item.claimedByDisplayName = claimedByDisplayName;
+        item.lastModifiedByDisplayName = normalizeActor(lastModifiedByDisplayName);
+        item.createdAt = createdAt == null ? Instant.now() : createdAt;
+        item.updatedAt = updatedAt == null ? item.createdAt : updatedAt;
+        item.position = position;
+        item.quantity = normalizeQuantity(quantity);
+        item.sourceProvider = snapshot.provider();
+        item.sourceArticleId = snapshot.articleId();
+        item.sourceImageUrl = snapshot.imageUrl();
+        item.sourceCategory = snapshot.category();
+        item.sourcePriceAmount = snapshot.priceAmount();
+        item.sourceCurrency = snapshot.currency();
+        item.sourceSubtitle = snapshot.subtitle();
+        item.sourcePayloadJson = snapshot.rawPayloadJson() == null || snapshot.rawPayloadJson().isBlank()
+                ? "{}"
+                : snapshot.rawPayloadJson();
+        return item;
+    }
+
     static ShoppingListItem manual(
             ShoppingList shoppingList,
             int position,
@@ -400,5 +479,9 @@ public class ShoppingListItem {
             throw new IllegalArgumentException("Item quantity must be at least 1.");
         }
         return quantity;
+    }
+
+    private static String normalizeActor(String actorDisplayName) {
+        return actorDisplayName == null || actorDisplayName.isBlank() ? "import" : actorDisplayName.trim();
     }
 }

@@ -52,6 +52,28 @@ public class ShoppingList extends AggregateRoot {
     protected ShoppingList() {
     }
 
+    public static ShoppingList restore(
+            UUID id,
+            String name,
+            ShoppingListStatus status,
+            Instant createdAt,
+            Instant updatedAt,
+            Instant archivedAt,
+            String lastModifiedByDisplayName
+    ) {
+        ShoppingList list = new ShoppingList();
+        list.id = id == null ? UUID.randomUUID() : id;
+        list.name = normalizeName(name);
+        list.status = status == null ? ShoppingListStatus.ACTIVE : status;
+        list.createdAt = createdAt == null ? Instant.now() : createdAt;
+        list.updatedAt = updatedAt == null ? list.createdAt : updatedAt;
+        list.archivedAt = archivedAt;
+        list.lastModifiedByDisplayName = lastModifiedByDisplayName == null || lastModifiedByDisplayName.isBlank()
+                ? "import"
+                : lastModifiedByDisplayName.trim();
+        return list;
+    }
+
     public static ShoppingList create(String name, ActorDisplayName actorDisplayName, Clock clock) {
         Instant now = clock.instant();
         ShoppingList list = new ShoppingList();
@@ -245,6 +267,10 @@ public class ShoppingList extends AggregateRoot {
         return items.stream()
                 .sorted(Comparator.comparingInt(ShoppingListItem::getPosition))
                 .toList();
+    }
+
+    public void addRestoredItem(ShoppingListItem item) {
+        items.add(item);
     }
 
     private void ensureActive() {

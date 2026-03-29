@@ -1,5 +1,5 @@
 import { apiRequest } from '../../shared/api/client'
-import type { SettingsSnapshot } from '../../shared/types/api'
+import type { SettingsBackup, SettingsBackupImportResult, SettingsSnapshot } from '../../shared/types/api'
 
 export function fetchSettingsSnapshot(activityPage = 1, errorPage = 1, activityPageSize = 2, errorPageSize = 2) {
   const params = new URLSearchParams({
@@ -9,4 +9,15 @@ export function fetchSettingsSnapshot(activityPage = 1, errorPage = 1, activityP
     errorPageSize: String(errorPageSize),
   })
   return apiRequest<SettingsSnapshot>(`/api/settings?${params.toString()}`)
+}
+
+export function exportSettingsBackup() {
+  return apiRequest<SettingsBackup>('/api/settings/backup')
+}
+
+export function importSettingsBackup(backup: SettingsBackup) {
+  return apiRequest<SettingsBackupImportResult>('/api/settings/backup/import', {
+    method: 'POST',
+    body: backup,
+  })
 }
