@@ -6,5 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface ItemActivityLogRepository extends JpaRepository<ItemActivityLogEntry, UUID> {
 
+    List<ItemActivityLogEntry> findAllByEventTypeOrderByOccurredAtAsc(String eventType);
+
     List<ItemActivityLogEntry> findTop20ByListIdOrderByOccurredAtDesc(UUID listId);
 }
