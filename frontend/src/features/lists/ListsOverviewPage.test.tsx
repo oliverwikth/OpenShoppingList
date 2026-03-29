@@ -78,7 +78,7 @@ describe('ListsOverviewPage', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByRole('heading', { name: 'Alla listor' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Listor' })).toBeInTheDocument()
     expect(screen.getByText('Anna')).toBeInTheDocument()
     expect(await screen.findByText('Veckohandling')).toBeInTheDocument()
     expect(screen.getByText('Senast av Anna')).toBeInTheDocument()
@@ -424,7 +424,7 @@ describe('ListsOverviewPage', () => {
     expect(screen.getByText('Anna')).toBeInTheDocument()
     expect(screen.getByText('Tortillabröd')).toBeInTheDocument()
     expect(container.querySelector('img[src="https://example.com/tortilla.jpg"]')).not.toBeNull()
-    expect(screen.getByRole('link', { name: 'Alla listor' })).toHaveAttribute('href', '/anna')
+    expect(screen.getByRole('link', { name: 'Listor' })).toHaveAttribute('href', '/anna')
     expect(container.querySelector('.stats-hero-chart')).toHaveAttribute('aria-label', 'Kostnad per period')
     expect(screen.getByRole('tab', { name: '1 mån' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: '3 mån' })).toBeInTheDocument()

@@ -92,7 +92,7 @@
 
 .home-view-switch {
   display: inline-grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 4px;
   padding: 4px;
   border-radius: 999px;
@@ -1030,6 +1030,143 @@
 
 .list-swipe-card__content.household-list-card--minimal {
   border-bottom: 0;
+}
+
+.settings-card,
+.settings-section {
+  display: grid;
+  gap: 14px;
+}
+
+.settings-section .section-heading {
+  align-items: start;
+}
+
+.settings-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.settings-pagination {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  padding: 10px 2px 2px;
+}
+
+.settings-pagination__summary {
+  color: var(--text);
+  font-size: 1.1rem;
+  line-height: 1.15;
+  text-align: center;
+}
+
+.settings-pagination__track {
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(96, 123, 125, 0.16);
+  overflow: hidden;
+}
+
+.settings-pagination__bar {
+  display: block;
+  height: 100%;
+  min-width: 18px;
+  border-radius: 999px;
+  background: var(--brand);
+}
+
+.settings-pagination__button {
+  min-width: min(100%, 360px);
+  width: min(100%, 360px);
+  min-height: 56px;
+  font-size: 1.1rem;
+  box-shadow: 0 14px 28px rgba(13, 2, 33, 0.14);
+}
+
+.settings-entry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(96, 123, 125, 0.14);
+}
+
+.settings-entry--stacked {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.settings-entry__body {
+  display: grid;
+  gap: 4px;
+}
+
+.settings-entry__body strong,
+.settings-entry__body p {
+  margin: 0;
+}
+
+.settings-entry__body p {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.settings-entry__aside {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+}
+
+.settings-entry__aside--compact {
+  justify-items: start;
+}
+
+.settings-log-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.settings-log-pill--error {
+  background: rgba(214, 63, 80, 0.14);
+  color: #9a2232;
+}
+
+.settings-log-pill--warn {
+  background: rgba(236, 167, 57, 0.16);
+  color: #8f5a00;
+}
+
+.settings-log-details {
+  margin: 0;
+}
+
+.settings-log-details summary {
+  cursor: pointer;
+  color: var(--brand);
+  font-weight: 700;
+}
+
+.settings-log-details pre {
+  margin: 10px 0 0;
+  padding: 12px;
+  border-radius: 16px;
+  background: #f4f7fb;
+  color: var(--text);
+  font-size: 0.76rem;
+  line-height: 1.45;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .catalog-row {

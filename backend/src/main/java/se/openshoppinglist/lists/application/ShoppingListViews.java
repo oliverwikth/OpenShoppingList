@@ -19,6 +19,7 @@ public final class ShoppingListViews {
             int itemCount,
             int checkedItemCount,
             Instant updatedAt,
+            Instant archivedAt,
             String lastModifiedByDisplayName
     ) {
     }
@@ -126,6 +127,56 @@ public final class ShoppingListViews {
             String eventType,
             String actorDisplayName,
             Instant occurredAt
+    ) {
+    }
+
+    public record SettingsSnapshotView(
+            List<ShoppingListOverviewView> archivedLists,
+            SettingsActivityPageView recentActivities,
+            AppErrorLogPageView errorLogs
+    ) {
+    }
+
+    public record SettingsActivityView(
+            UUID id,
+            UUID listId,
+            String listName,
+            UUID itemId,
+            String eventType,
+            String actorDisplayName,
+            Instant occurredAt
+    ) {
+    }
+
+    public record AppErrorLogView(
+            UUID id,
+            String level,
+            String source,
+            String code,
+            String message,
+            String path,
+            String httpMethod,
+            String actorDisplayName,
+            String detailsJson,
+            Instant occurredAt
+    ) {
+    }
+
+    public record SettingsActivityPageView(
+            List<SettingsActivityView> items,
+            int page,
+            int pageSize,
+            long totalItems,
+            boolean hasNextPage
+    ) {
+    }
+
+    public record AppErrorLogPageView(
+            List<AppErrorLogView> items,
+            int page,
+            int pageSize,
+            long totalItems,
+            boolean hasNextPage
     ) {
     }
 }

@@ -8,6 +8,7 @@ export interface ShoppingListOverview {
   itemCount: number
   checkedItemCount: number
   updatedAt: string
+  archivedAt: string | null
   lastModifiedByDisplayName: string
 }
 
@@ -137,4 +138,49 @@ export interface ApiErrorResponse {
   code: string
   message: string
   timestamp: string
+}
+
+export interface SettingsActivityEntry {
+  id: string
+  listId: string
+  listName: string
+  itemId: string | null
+  eventType: string
+  actorDisplayName: string
+  occurredAt: string
+}
+
+export interface SettingsActivityPage {
+  items: SettingsActivityEntry[]
+  page: number
+  pageSize: number
+  totalItems: number
+  hasNextPage: boolean
+}
+
+export interface AppErrorLogEntry {
+  id: string
+  level: string
+  source: string
+  code: string | null
+  message: string
+  path: string | null
+  httpMethod: string | null
+  actorDisplayName: string | null
+  detailsJson: string
+  occurredAt: string
+}
+
+export interface AppErrorLogPage {
+  items: AppErrorLogEntry[]
+  page: number
+  pageSize: number
+  totalItems: number
+  hasNextPage: boolean
+}
+
+export interface SettingsSnapshot {
+  archivedLists: ShoppingListOverview[]
+  recentActivities: SettingsActivityPage
+  errorLogs: AppErrorLogPage
 }

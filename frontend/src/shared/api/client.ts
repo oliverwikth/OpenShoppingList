@@ -1,4 +1,5 @@
 import type { ApiErrorResponse } from '../types/api'
+import { reportClientError } from '../errorReporting'
 
 type HttpMethod = 'GET' | 'POST' | 'PATCH'
 
@@ -11,15 +12,24 @@ interface RequestOptions {
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = 'GET', actorName, body, signal } = options
-  const response = await fetch(path, {
-    method,
-    signal,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(actorName ? { 'X-Actor-Display-Name': actorName } : {}),
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  })
+  let response: Response
+
+  try {
+    response = await fetch(path, {
+      method,
+      signal,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(actorName ? { 'X-Actor-Display-Name': actorName } : {}),
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    })
+  } catch (error) {
+    if (path !== '/api/error-reports') {
+      await reportClientError('FRONTEND_NETWORK', error instanceof Error ? error : new Error('Network request failed'), { path })
+    }
+    throw error
+  }
 
   if (!response.ok) {
     let message = 'Något gick fel.'

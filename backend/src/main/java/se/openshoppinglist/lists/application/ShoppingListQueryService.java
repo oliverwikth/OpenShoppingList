@@ -101,6 +101,7 @@ public class ShoppingListQueryService {
                 itemCount,
                 checkedCount,
                 shoppingList.getUpdatedAt(),
+                shoppingList.getArchivedAt(),
                 shoppingList.getLastModifiedByDisplayName()
         );
     }

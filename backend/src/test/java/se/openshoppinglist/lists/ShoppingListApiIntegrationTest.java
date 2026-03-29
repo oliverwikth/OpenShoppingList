@@ -170,6 +170,51 @@ class ShoppingListApiIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void returnsSettingsSnapshotWithArchivedListsHistoryAndErrors() throws Exception {
+        MvcResult archivedListResult = mockMvc.perform(post("/api/lists")
+                        .header(ActorDisplayName.HEADER_NAME, "anna")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Veckohandling"}
+                                """))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        String archivedListId = readId(archivedListResult);
+
+        mockMvc.perform(post("/api/lists/{listId}/items/manual", archivedListId)
+                        .header(ActorDisplayName.HEADER_NAME, "olle")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"title":"Mjölk","note":"","quantity":1}
+                                """))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/lists/{listId}/archive", archivedListId)
+                        .header(ActorDisplayName.HEADER_NAME, "anna"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/lists/stats")
+                        .param("range", "fel"))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(get("/api/settings"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.archivedLists.length()").value(1))
+                .andExpect(jsonPath("$.archivedLists[0].name").value("Veckohandling"))
+                .andExpect(jsonPath("$.archivedLists[0].status").value("ARCHIVED"))
+                .andExpect(jsonPath("$.recentActivities.items.length()").value(org.hamcrest.Matchers.greaterThanOrEqualTo(2)))
+                .andExpect(jsonPath("$.recentActivities.page").value(1))
+                .andExpect(jsonPath("$.recentActivities.pageSize").value(2))
+                .andExpect(jsonPath("$.recentActivities[\"items\"][0].listName").value("Veckohandling"))
+                .andExpect(jsonPath("$.errorLogs.items.length()").value(1))
+                .andExpect(jsonPath("$.errorLogs.page").value(1))
+                .andExpect(jsonPath("$.errorLogs.pageSize").value(2))
+                .andExpect(jsonPath("$.errorLogs[\"items\"][0].source").value("BACKEND_API"))
+                .andExpect(jsonPath("$.errorLogs[\"items\"][0].code").value("INVALID_REQUEST"));
+    }
+
+    @Test
     void ordersPaginatedListOverviewByCreatedTimeInsteadOfUpdatedTime() throws Exception {
         importWillysList("Att handla 18 januari 2025", LocalDate.parse("2025-01-18"), 10.0, "100-old_ST");
         importWillysList("Att handla 8 mars 2026", LocalDate.parse("2026-03-08"), 20.0, "100-new_ST");

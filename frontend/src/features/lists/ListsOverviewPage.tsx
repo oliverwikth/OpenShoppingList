@@ -214,7 +214,7 @@ export function ListsOverviewPage() {
 
         <section className="screen-card screen-card--minimal">
           <div className="section-heading">
-            <h1>Alla listor</h1>
+            <h1>Listor</h1>
             <button className="header-action header-action--light" onClick={() => void loadLists(1, pageSize, 'replace')} type="button">
               Uppdatera
             </button>
