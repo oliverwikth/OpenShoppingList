@@ -161,6 +161,10 @@ class WillysRetailerSearchAdapter implements RetailerSearchPort {
             String name,
             String productLine2,
             BigDecimal priceValue,
+            String price,
+            String comparePrice,
+            String comparePriceUnit,
+            String priceUnit,
             String googleAnalyticsCategory,
             WillysImage image
     ) {

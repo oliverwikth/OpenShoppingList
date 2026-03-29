@@ -116,7 +116,8 @@ public class ShoppingListQueryService {
                         item.getSourceImageUrl(),
                         item.getSourceCategory(),
                         item.getSourcePriceAmount(),
-                        item.getSourceCurrency()
+                        item.getSourceCurrency(),
+                        item.getSourcePayloadJson()
                 );
         return new ShoppingListItemView(
                 item.getId(),

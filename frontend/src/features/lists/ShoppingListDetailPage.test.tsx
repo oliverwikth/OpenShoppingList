@@ -207,6 +207,7 @@ describe('ShoppingListDetailPage', () => {
                 category: 'Grönsaker',
                 priceAmount: 39.9,
                 currency: 'SEK',
+                rawPayloadJson: '{}',
               },
             },
           ],
@@ -227,6 +228,201 @@ describe('ShoppingListDetailPage', () => {
 
     expect(await screen.findByText('Gul lök')).toBeInTheDocument()
     expect(screen.getByLabelText('Totalpris')).toHaveTextContent('7.98 SEK')
+  })
+
+  it('shows per-kilogram prices and omits duplicated quantity text in varor overview', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          ...initialList,
+          items: [
+            {
+              id: 'item-1',
+              itemType: 'EXTERNAL_ARTICLE',
+              title: 'Gul lök',
+              checked: false,
+              checkedAt: null,
+              checkedByDisplayName: null,
+              lastModifiedByDisplayName: 'anna',
+              createdAt: '2026-03-26T18:05:00Z',
+              updatedAt: '2026-03-26T18:05:00Z',
+              position: 1,
+              quantity: 1,
+              manualNote: '',
+              externalSnapshot: {
+                provider: 'willys',
+                articleId: 'lok-1',
+                subtitle: 'ca: 175g, Sverige',
+                imageUrl: null,
+                category: 'Grönsaker',
+                priceAmount: 11.9,
+                currency: 'SEK',
+                rawPayloadJson: '{"priceUnit":"kr/kg"}',
+              },
+            },
+          ],
+          recentActivities: [],
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+    )
+
+    render(
+      <MemoryRouter initialEntries={['/anna/lists/list-1/varor']}>
+        <AppShell />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('Gul lök')).toBeInTheDocument()
+    expect(screen.getByText('11.90 SEK/kg')).toBeInTheDocument()
+    expect(screen.queryByText('1 st')).not.toBeInTheDocument()
+  })
+
+  it('shows per-kilogram prices in retailer search results', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+
+    fetchMock.mockImplementation(async (input, init) => {
+      const url = String(input)
+
+      if (url === '/api/lists/list-1' && (!init?.method || init.method === 'GET')) {
+        return new Response(JSON.stringify(initialList), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+
+      if (url.startsWith('/api/retailer-search?q=l%C3%B6k&page=0')) {
+        return new Response(
+          JSON.stringify(
+            createSearchResponse('lök', [
+              {
+                ...createRetailerResult('lok-1', 'Gul lök'),
+                subtitle: 'ca: 175g, Sverige',
+                category: 'Grönsaker',
+                priceAmount: 11.9,
+                rawPayloadJson: '{"priceUnit":"kr/kg"}',
+              },
+            ]),
+          ),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        )
+      }
+
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+
+    render(
+      <MemoryRouter initialEntries={['/anna/lists/list-1/varor/search?q=l%C3%B6k']}>
+        <AppShell />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('Gul lök')).toBeInTheDocument()
+    expect(screen.getByText('11.90 SEK/kg')).toBeInTheDocument()
+  })
+
+  it('shows both shelf price and comparison price for packaged retailer products', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+
+    fetchMock.mockImplementation(async (input, init) => {
+      const url = String(input)
+
+      if (url === '/api/lists/list-1' && (!init?.method || init.method === 'GET')) {
+        return new Response(JSON.stringify(initialList), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+
+      if (url.startsWith('/api/retailer-search?q=falukorv&page=0')) {
+        return new Response(
+          JSON.stringify(
+            createSearchResponse('falukorv', [
+              {
+                ...createRetailerResult('korv-1', 'Falukorv Ring'),
+                subtitle: 'SCAN, 800g',
+                category: 'Kött, chark & fågel',
+                priceAmount: 39.8,
+                rawPayloadJson: '{"price":"39,80 kr","priceUnit":"kr/st","comparePrice":"49,75 kr","comparePriceUnit":"kg"}',
+              },
+            ]),
+          ),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        )
+      }
+
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+
+    render(
+      <MemoryRouter initialEntries={['/anna/lists/list-1/varor/search?q=falukorv']}>
+        <AppShell />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('Falukorv Ring')).toBeInTheDocument()
+    expect(screen.getByText('39.80 SEK/st')).toBeInTheDocument()
+    expect(screen.getByText('49.75 SEK/kg')).toBeInTheDocument()
+  })
+
+  it('shows both shelf price and comparison price in varor overview for packaged retailer products', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          ...initialList,
+          items: [
+            {
+              id: 'item-1',
+              itemType: 'EXTERNAL_ARTICLE',
+              title: 'Falukorv Ring',
+              checked: false,
+              checkedAt: null,
+              checkedByDisplayName: null,
+              lastModifiedByDisplayName: 'anna',
+              createdAt: '2026-03-26T18:05:00Z',
+              updatedAt: '2026-03-26T18:05:00Z',
+              position: 1,
+              quantity: 1,
+              manualNote: '',
+              externalSnapshot: {
+                provider: 'willys',
+                articleId: 'korv-1',
+                subtitle: 'SCAN, 800g',
+                imageUrl: null,
+                category: 'Kött, chark & fågel',
+                priceAmount: 39.8,
+                currency: 'SEK',
+                rawPayloadJson: '{"price":"39,80 kr","priceUnit":"kr/st","comparePrice":"49,75 kr","comparePriceUnit":"kg"}',
+              },
+            },
+          ],
+          recentActivities: [],
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+    )
+
+    render(
+      <MemoryRouter initialEntries={['/anna/lists/list-1/varor']}>
+        <AppShell />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('Falukorv Ring')).toBeInTheDocument()
+    expect(screen.getByText('39.80 SEK/st')).toBeInTheDocument()
+    expect(screen.getByText('49.75 SEK/kg')).toBeInTheDocument()
   })
 
   it('debounces manual search adds after the last change', async () => {

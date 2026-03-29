@@ -30,6 +30,7 @@ export interface ExternalSnapshot {
   category: string | null
   priceAmount: number | null
   currency: string | null
+  rawPayloadJson: string
 }
 
 export interface ShoppingListItem {

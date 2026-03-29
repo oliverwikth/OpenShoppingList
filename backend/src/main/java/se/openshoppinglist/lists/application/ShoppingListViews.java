@@ -117,7 +117,8 @@ public final class ShoppingListViews {
             String imageUrl,
             String category,
             BigDecimal priceAmount,
-            String currency
+            String currency,
+            String rawPayloadJson
     ) {
     }
 
