@@ -75,7 +75,8 @@ export function ShoppingListDetailPage() {
   const pollingIntervalRef = useRef<number | null>(null)
 
   const currentView = resolveView(location.pathname)
-  const currentRootView = currentView === 'search' || currentView === 'search-expanded' ? 'items' : currentView
+  const isSearchView = currentView === 'search' || currentView === 'search-expanded'
+  const currentRootView = isSearchView ? 'items' : currentView
   const currentSearchPage = resolveSearchPage(currentView, searchParams)
   const backPath = currentView === 'search-expanded'
     ? viewPath(actorName, listId, 'search', searchInput)
@@ -327,6 +328,10 @@ export function ShoppingListDetailPage() {
     if (previousView === 'items' && currentView !== 'items') {
       void flushAllPendingVarorAdjustments()
     }
+
+    if (currentView === 'items' && (previousView === 'search' || previousView === 'search-expanded')) {
+      searchInputRef.current?.blur()
+    }
   }, [currentView, flushAllPendingVarorAdjustments])
 
   useEffect(() => {
@@ -354,12 +359,26 @@ export function ShoppingListDetailPage() {
   }, [])
 
   useLayoutEffect(() => {
-    if (currentView !== 'search') {
+    if (!isSearchView) {
       return
     }
 
-    searchInputRef.current?.focus()
-  }, [currentView])
+    const input = searchInputRef.current
+    if (!input) {
+      return
+    }
+
+    if (document.activeElement !== input) {
+      input.focus()
+    }
+
+    try {
+      const cursorPosition = input.value.length
+      input.setSelectionRange(cursorPosition, cursorPosition)
+    } catch {
+      // Selection APIs are not available for every input implementation.
+    }
+  }, [isSearchView])
 
   useEffect(() => {
     if (deferredSearchInput.trim().length < 2) {
@@ -663,18 +682,33 @@ export function ShoppingListDetailPage() {
 
   function updateSearchValue(value: string) {
     setSearchInput(value)
+
+    if (currentView === 'items') {
+      navigate(viewPath(actorName, listId, 'search', value), { replace: true })
+      return
+    }
+
+    if (currentView === 'search-expanded') {
+      navigate(viewPath(actorName, listId, 'search', value), { replace: true })
+      return
+    }
+
     const nextSearchParams = new URLSearchParams(searchParams)
     if (value) {
       nextSearchParams.set('q', value)
     } else {
       nextSearchParams.delete('q')
     }
-    if (currentView === 'search-expanded') {
-      nextSearchParams.set('page', '1')
-    } else {
-      nextSearchParams.delete('page')
-    }
+    nextSearchParams.delete('page')
     setSearchParams(nextSearchParams, { replace: true })
+  }
+
+  function handleSearchFieldFocus() {
+    if (currentView !== 'items') {
+      return
+    }
+
+    navigate(viewPath(actorName, listId, 'search', searchInput))
   }
 
   function handleAddManualFromSearch() {
@@ -808,161 +842,160 @@ export function ShoppingListDetailPage() {
 
         {list ? (
           <>
-            {currentView === 'items' ? (
+            {currentRootView === 'items' ? (
               <section className="screen-stack">
-                <button
-                  aria-label="Öppna sök"
-                  className="search-input search-input--button"
-                  onClick={() => navigate(viewPath(actorName, listId, 'search'))}
-                  type="button"
-                >
-                  Sök eller lägg till vara
-                </button>
-
-                {itemsInOrder.length === 0 ? <p className="empty-panel">Listan är tom än. Gå till Sök för att lägga till dina första varor.</p> : null}
-
-                {itemsInOrder.length > 0 ? (
-                  <>
-                    <div className="catalog-list catalog-list--panel">
-                      {itemsInOrder.map((item) => (
-                        <article className="catalog-row catalog-row--minimal" key={item.id}>
-                          <div className="catalog-row__media">{renderItemMedia(item)}</div>
-                          <div className="catalog-row__content">
-                            <strong>{item.title}</strong>
-                            <div className="catalog-row__meta">
-                              <span>{itemSubtitle(item)}</span>
-                              <span>{formatQuantity(item.quantity)}</span>
-                              {item.externalSnapshot?.priceAmount !== null &&
-                              item.externalSnapshot?.priceAmount !== undefined ? (
-                                <span>{formatPrice(item.externalSnapshot.priceAmount, item.externalSnapshot.currency)}</span>
-                              ) : null}
-                            </div>
-                          </div>
-                          <div className="catalog-row__aside catalog-row__aside--stack">
-                            <QuantityAction
-                              count={item.quantity}
-                              isPending={false}
-                              onDecrease={() => handleDecreaseItemFromVaror(item)}
-                              onIncrease={() => handleIncreaseItemFromVaror(item)}
-                              title={item.title}
-                            />
-                          </div>
-                        </article>
-                      ))}
+                <section className={`search-stage ${isSearchView ? 'search-stage--active' : ''}`}>
+                  <div className="search-shell search-shell--top">
+                    <div className="search-input-wrap">
+                      <input
+                        ref={searchInputRef}
+                        aria-label="Sök artikel"
+                        className="search-input"
+                        enterKeyHint="search"
+                        placeholder="Sök eller lägg till vara"
+                        value={searchInput}
+                        onChange={(event) => updateSearchValue(event.target.value)}
+                        onFocus={handleSearchFieldFocus}
+                      />
+                      {searchInput ? (
+                        <button
+                          aria-label="Rensa sökning"
+                          className="search-clear"
+                          onClick={() => {
+                            updateSearchValue('')
+                            searchResultsStateRef.current = { query: '', pages: {} }
+                            setSearchResultsState({ query: '', pages: {} })
+                            searchInputRef.current?.focus()
+                          }}
+                          type="button"
+                        >
+                          ×
+                        </button>
+                      ) : null}
                     </div>
+                  </div>
+                </section>
 
-                    <section className="total-bar" aria-label="Totalpris">
-                      <span>Total</span>
-                      <strong>{formatPrice(pricedItemsTotal.amount, pricedItemsTotal.currency)}</strong>
-                    </section>
+                {currentView === 'items' ? (
+                  <>
+                    {itemsInOrder.length === 0 ? <p className="empty-panel">Listan är tom än. Börja skriva i sökfältet för att lägga till dina första varor.</p> : null}
+
+                    {itemsInOrder.length > 0 ? (
+                      <>
+                        <div className="catalog-list catalog-list--panel">
+                          {itemsInOrder.map((item) => (
+                            <article className="catalog-row catalog-row--minimal" key={item.id}>
+                              <div className="catalog-row__media">{renderItemMedia(item)}</div>
+                              <div className="catalog-row__content">
+                                <strong>{item.title}</strong>
+                                <div className="catalog-row__meta">
+                                  <span>{itemSubtitle(item)}</span>
+                                  <span>{formatQuantity(item.quantity)}</span>
+                                  {item.externalSnapshot?.priceAmount !== null &&
+                                  item.externalSnapshot?.priceAmount !== undefined ? (
+                                    <span>{formatPrice(item.externalSnapshot.priceAmount, item.externalSnapshot.currency)}</span>
+                                  ) : null}
+                                </div>
+                              </div>
+                              <div className="catalog-row__aside catalog-row__aside--stack">
+                                <QuantityAction
+                                  count={item.quantity}
+                                  isPending={false}
+                                  onDecrease={() => handleDecreaseItemFromVaror(item)}
+                                  onIncrease={() => handleIncreaseItemFromVaror(item)}
+                                  title={item.title}
+                                />
+                              </div>
+                            </article>
+                          ))}
+                        </div>
+
+                        <section className="total-bar" aria-label="Totalpris">
+                          <span>Total</span>
+                          <strong>{formatPrice(pricedItemsTotal.amount, pricedItemsTotal.currency)}</strong>
+                        </section>
+                      </>
+                    ) : null}
                   </>
                 ) : null}
-              </section>
-            ) : null}
 
-            {currentView === 'search' || currentView === 'search-expanded' ? (
-              <section className="screen-stack">
-                <div className="search-shell search-shell--top">
-                  <div className="search-input-wrap">
-                    <input
-                      ref={searchInputRef}
-                      aria-label="Sök artikel"
-                      className="search-input"
-                      placeholder="Lägg till produkt"
-                      value={searchInput}
-                      onChange={(event) => updateSearchValue(event.target.value)}
-                    />
-                    {searchInput ? (
-                      <button
-                        aria-label="Rensa sökning"
-                        className="search-clear"
-                        onClick={() => {
-                          updateSearchValue('')
-                          searchResultsStateRef.current = { query: '', pages: {} }
-                          setSearchResultsState({ query: '', pages: {} })
-                          searchInputRef.current?.focus()
-                        }}
-                        type="button"
-                      >
-                        ×
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
-
-                <div className="catalog-list catalog-list--search">
-                  {manualSearchLabel ? (
-                    <article className="catalog-row" key="manual-search-item">
-                      <div className="catalog-row__media catalog-row__media--brand">TXT</div>
-                      <div className="catalog-row__content">
-                        <strong>{manualSearchLabel}</strong>
-                        <p>Fritextartikel</p>
-                      </div>
-                      <div className="catalog-row__aside">
-                        <QuantityAction
-                          count={manualSearchQuantity}
-                          isPending={busySearchActionKeys[manualSearchActionKey] === true}
-                          onDecrease={manualSearchQuantity > 0 ? handleDecreaseManualFromSearch : undefined}
-                          onIncrease={handleAddManualFromSearch}
-                          title={manualSearchLabel}
-                        />
-                      </div>
-                    </article>
-                  ) : null}
-
-                  {isSearching ? <p className="empty-state">Söker...</p> : null}
-                  {searchResponse?.available === false && searchResponse.message ? <div className="info-banner">{searchResponse.message}</div> : null}
-                  {!isSearching && searchInput.trim().length < 2 ? (
-                    <p className="empty-state">Skriv minst två tecken för att söka artiklar.</p>
-                  ) : null}
-                  {!isSearching && searchInput.trim().length >= 2 && searchResponse !== null && !searchResponse.results.length ? (
-                    <p className="empty-state">Inga butiksträffar just nu. Lägg till som fritext i stället.</p>
-                  ) : null}
-
-                  <div className="catalog-list">
-                    {searchResults.map((result) => {
-                      const matchingItem = findMatchingExternalSearchItem(list?.items ?? [], result)
-                      const quantity = searchSelectionQuantity(matchingItem, pendingSearchAdds[externalSearchKey(result)])
-
-                      return (
-                        <article className="catalog-row" key={result.articleId}>
-                          <div className="catalog-row__media">{renderSearchMedia(result)}</div>
+                {isSearchView ? (
+                  <div className="search-results-panel">
+                    <div className="catalog-list catalog-list--search">
+                      {manualSearchLabel ? (
+                        <article className="catalog-row" key="manual-search-item">
+                          <div className="catalog-row__media catalog-row__media--brand">TXT</div>
                           <div className="catalog-row__content">
-                            <strong>{result.title}</strong>
-                            <p>{result.subtitle ?? result.category ?? 'Butiksartikel'}</p>
-                            <div className="catalog-row__meta">
-                              {result.category ? <span>{result.category}</span> : null}
-                              {result.priceAmount !== null ? <span>{formatPrice(result.priceAmount, result.currency)}</span> : null}
-                            </div>
+                            <strong>{manualSearchLabel}</strong>
+                            <p>Fritextartikel</p>
                           </div>
                           <div className="catalog-row__aside">
                             <QuantityAction
-                              count={quantity}
-                              isPending={busySearchActionKeys[externalSearchKey(result)] === true}
-                              onDecrease={quantity > 0 ? () => void handleDecreaseRetailerItemFromSearch(result, matchingItem) : undefined}
-                              onIncrease={() => void handleAddRetailerItem(result)}
-                              title={result.title}
+                              count={manualSearchQuantity}
+                              isPending={busySearchActionKeys[manualSearchActionKey] === true}
+                              onDecrease={manualSearchQuantity > 0 ? handleDecreaseManualFromSearch : undefined}
+                              onIncrease={handleAddManualFromSearch}
+                              title={manualSearchLabel}
                             />
                           </div>
                         </article>
-                      )
-                    })}
-                  </div>
+                      ) : null}
 
-                  {searchResponse?.hasMoreResults ? (
-                    <button
-                      aria-label="Visa fler träffar"
-                      className="search-expand"
-                      onClick={() =>
-                        navigate(viewPath(actorName, listId, 'search-expanded', searchInput, currentSearchPage + 1))
-                      }
-                      type="button"
-                    >
-                      <span className="search-expand__icon">↓</span>
-                      <span>Visa fler träffar</span>
-                    </button>
-                  ) : null}
-                </div>
+                      {isSearching ? <p className="empty-state">Söker...</p> : null}
+                      {searchResponse?.available === false && searchResponse.message ? <div className="info-banner">{searchResponse.message}</div> : null}
+                      {!isSearching && searchInput.trim().length < 2 ? (
+                        <p className="empty-state">Skriv minst två tecken för att söka artiklar.</p>
+                      ) : null}
+                      {!isSearching && searchInput.trim().length >= 2 && searchResponse !== null && !searchResponse.results.length ? (
+                        <p className="empty-state">Inga butiksträffar just nu. Lägg till som fritext i stället.</p>
+                      ) : null}
+
+                      <div className="catalog-list">
+                        {searchResults.map((result) => {
+                          const matchingItem = findMatchingExternalSearchItem(list?.items ?? [], result)
+                          const quantity = searchSelectionQuantity(matchingItem, pendingSearchAdds[externalSearchKey(result)])
+
+                          return (
+                            <article className="catalog-row" key={result.articleId}>
+                              <div className="catalog-row__media">{renderSearchMedia(result)}</div>
+                              <div className="catalog-row__content">
+                                <strong>{result.title}</strong>
+                                <p>{result.subtitle ?? result.category ?? 'Butiksartikel'}</p>
+                                <div className="catalog-row__meta">
+                                  {result.category ? <span>{result.category}</span> : null}
+                                  {result.priceAmount !== null ? <span>{formatPrice(result.priceAmount, result.currency)}</span> : null}
+                                </div>
+                              </div>
+                              <div className="catalog-row__aside">
+                                <QuantityAction
+                                  count={quantity}
+                                  isPending={busySearchActionKeys[externalSearchKey(result)] === true}
+                                  onDecrease={quantity > 0 ? () => void handleDecreaseRetailerItemFromSearch(result, matchingItem) : undefined}
+                                  onIncrease={() => void handleAddRetailerItem(result)}
+                                  title={result.title}
+                                />
+                              </div>
+                            </article>
+                          )
+                        })}
+                      </div>
+
+                      {searchResponse?.hasMoreResults ? (
+                        <button
+                          aria-label="Visa fler träffar"
+                          className="search-expand"
+                          onClick={() =>
+                            navigate(viewPath(actorName, listId, 'search-expanded', searchInput, currentSearchPage + 1))
+                          }
+                          type="button"
+                        >
+                          <span className="search-expand__icon">↓</span>
+                          <span>Visa fler träffar</span>
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
               </section>
             ) : null}
 

@@ -708,7 +708,7 @@ describe('ShoppingListDetailPage', () => {
     expect(screen.getByRole('link', { name: '←' })).toHaveAttribute('href', '/anna/lists/list-1/varor')
   })
 
-  it('focuses the search input immediately when opening search from varor', async () => {
+  it('keeps a real search input mounted in varor so tapping it opens search with focus intact', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
       new Response(JSON.stringify(initialList), {
         status: 200,
@@ -724,9 +724,12 @@ describe('ShoppingListDetailPage', () => {
 
     expect(await screen.findByText('Veckohandling')).toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('button', { name: 'Öppna sök' }))
+    const searchInput = screen.getByLabelText('Sök artikel')
 
-    expect(await screen.findByLabelText('Sök artikel')).toHaveFocus()
+    await userEvent.click(searchInput)
+
+    expect(searchInput).toHaveFocus()
+    expect(await screen.findByText('Skriv minst två tecken för att söka artiklar.')).toBeInTheDocument()
   })
 
   it('clears the search input from the clear button', async () => {
