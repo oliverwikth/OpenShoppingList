@@ -9,7 +9,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,6 +23,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import se.openshoppinglist.actor.ActorDisplayName;
+import se.openshoppinglist.common.logging.AppLogRetentionService;
 import se.openshoppinglist.support.PostgresIntegrationTest;
 
 @SpringBootTest
@@ -35,8 +39,12 @@ class ShoppingListApiIntegrationTest extends PostgresIntegrationTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    @Autowired
+    private AppLogRetentionService appLogRetentionService;
+
     @BeforeEach
     void resetDatabase() {
+        jdbcTemplate.execute("delete from app_error_log");
         jdbcTemplate.execute("delete from item_activity_log");
         jdbcTemplate.execute("delete from shopping_list_item");
         jdbcTemplate.execute("delete from shopping_list");
@@ -599,6 +607,65 @@ class ShoppingListApiIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void prunesActivityAndErrorLogsDownToThreeThousandRows() throws Exception {
+        MvcResult createListResult = mockMvc.perform(post("/api/lists")
+                        .header(ActorDisplayName.HEADER_NAME, "anna")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Veckohandling"}
+                                """))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        UUID listId = UUID.fromString(readId(createListResult));
+        Instant baseInstant = Instant.parse("2026-03-01T00:00:00Z");
+
+        for (int index = 0; index < 3_002; index++) {
+            jdbcTemplate.update(
+                    """
+                            insert into item_activity_log (id, list_id, item_id, event_type, actor_display_name, payload_json, occurred_at)
+                            values (?, ?, ?, ?, ?, ?, ?)
+                            """,
+                    UUID.randomUUID(),
+                    listId,
+                    null,
+                    "shopping-list-item.checked",
+                    "actor-" + index,
+                    "{}",
+                    Timestamp.from(baseInstant.plusSeconds(index))
+            );
+
+            jdbcTemplate.update(
+                    """
+                            insert into app_error_log (id, level, source, code, message, path, http_method, actor_display_name, details_json, occurred_at)
+                            values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            """,
+                    UUID.randomUUID(),
+                    "WARN",
+                    "BACKEND_API",
+                    "code-" + index,
+                    "error-" + index,
+                    "/api/test",
+                    "GET",
+                    "anna",
+                    "{}",
+                    Timestamp.from(baseInstant.plusSeconds(index))
+            );
+        }
+
+        appLogRetentionService.pruneExcessRows();
+
+        org.assertj.core.api.Assertions.assertThat(countRows("select count(*) from item_activity_log")).isEqualTo(3_000);
+        org.assertj.core.api.Assertions.assertThat(countRows("select count(*) from app_error_log")).isEqualTo(3_000);
+        org.assertj.core.api.Assertions.assertThat(countRows("select count(*) from item_activity_log where actor_display_name = 'actor-0'")).isZero();
+        org.assertj.core.api.Assertions.assertThat(countRows("select count(*) from item_activity_log where actor_display_name = 'actor-1'")).isZero();
+        org.assertj.core.api.Assertions.assertThat(countRows("select count(*) from item_activity_log where actor_display_name = 'actor-3001'")).isEqualTo(1);
+        org.assertj.core.api.Assertions.assertThat(countRows("select count(*) from app_error_log where code = 'code-0'")).isZero();
+        org.assertj.core.api.Assertions.assertThat(countRows("select count(*) from app_error_log where code = 'code-1'")).isZero();
+        org.assertj.core.api.Assertions.assertThat(countRows("select count(*) from app_error_log where code = 'code-3001'")).isEqualTo(1);
+    }
+
+    @Test
     void importsAWillysListPayloadIntoANewShoppingList() throws Exception {
         mockMvc.perform(post("/api/lists/imports/willys")
                         .header(ActorDisplayName.HEADER_NAME, "anna")
@@ -801,6 +868,11 @@ class ShoppingListApiIntegrationTest extends PostgresIntegrationTest {
     private String readId(MvcResult result) throws Exception {
         JsonNode json = objectMapper.readTree(result.getResponse().getContentAsString());
         return json.path("id").asText();
+    }
+
+    private int countRows(String sql) {
+        Integer count = jdbcTemplate.queryForObject(sql, Integer.class);
+        return count == null ? 0 : count;
     }
 
     private void importWillysList(String name, LocalDate modifiedTime, double priceValue, String productCode) throws Exception {
