@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useActorName } from '../actor/useActorName'
 import { toTitledName } from '../../shared/displayName'
@@ -61,6 +61,14 @@ export function ShoppingListDetailPage() {
   const appliedListLoadRequestIdRef = useRef(0)
   const reconnectTimeoutRef = useRef<number | null>(null)
   const pollingIntervalRef = useRef<number | null>(null)
+  const listRef = useRef<ShoppingListDetail | null>(null)
+  const loadListRef = useRef<(options?: { background?: boolean }) => Promise<void>>(async () => {})
+  const flushPendingSearchAddRef = useRef<(actionKey: string) => Promise<void>>(async () => {})
+  const flushAllPendingSearchAddsRef = useRef<() => Promise<void>>(async () => {})
+  const flushPendingVarorAdjustmentRef = useRef<(itemId: string) => Promise<void>>(async () => {})
+  const flushAllPendingVarorAdjustmentsRef = useRef<() => Promise<void>>(async () => {})
+
+  listRef.current = list
 
   const currentView = resolveView(location.pathname)
   const isSearchView = currentView === 'search' || currentView === 'search-expanded'
@@ -73,11 +81,11 @@ export function ShoppingListDetailPage() {
       : `/${actorName}`
   const previousViewRef = useRef(currentView)
 
-  const loadList = useEffectEvent(async (options: { background?: boolean } = {}) => {
+  async function loadList(options: { background?: boolean } = {}) {
     const requestId = ++listLoadRequestIdRef.current
     const mutationVersionAtStart = localMutationVersionRef.current
 
-    if (!options.background || list === null) {
+    if (!options.background || listRef.current === null) {
       setIsLoading(true)
     }
 
@@ -93,11 +101,13 @@ export function ShoppingListDetailPage() {
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Kunde inte hämta listan.')
     } finally {
-      if (!options.background || list === null) {
+      if (!options.background || listRef.current === null) {
         setIsLoading(false)
       }
     }
-  })
+  }
+
+  loadListRef.current = loadList
 
   useEffect(() => {
     clearAllSearchAddTimeouts()
@@ -111,7 +121,7 @@ export function ShoppingListDetailPage() {
     appliedListLoadRequestIdRef.current = 0
     setPendingSearchAdds({})
     setBusySearchActionKeys({})
-    void loadList()
+    void loadListRef.current()
   }, [listId])
 
   useEffect(() => {
@@ -135,7 +145,7 @@ export function ShoppingListDetailPage() {
       }
 
       pollingIntervalRef.current = window.setInterval(() => {
-        void loadList({ background: true })
+        void loadListRef.current({ background: true })
       }, 5_000)
     }
 
@@ -160,7 +170,7 @@ export function ShoppingListDetailPage() {
         stopPolling()
       }
       socket.onmessage = () => {
-        void loadList({ background: true })
+        void loadListRef.current({ background: true })
       }
       socket.onclose = () => {
         socket = null
@@ -192,7 +202,7 @@ export function ShoppingListDetailPage() {
     setSearchInput(searchParams.get('q') ?? '')
   }, [searchParams])
 
-  const flushPendingSearchAdd = useEffectEvent(async (actionKey: string) => {
+  async function flushPendingSearchAdd(actionKey: string) {
     const pendingAdd = pendingSearchAddsRef.current[actionKey]
     if (!pendingAdd || inFlightSearchAddsRef.current[actionKey]) {
       return
@@ -217,8 +227,7 @@ export function ShoppingListDetailPage() {
       const remainingQuantity = currentPendingQuantity - pendingAdd.quantity
 
       if (remainingQuantity <= 0) {
-        const { [actionKey]: _ignoredPendingAdd, ...remainingPendingSearchAdds } = pendingSearchAddsRef.current
-        setPendingSearchAddsState(remainingPendingSearchAdds)
+        setPendingSearchAddsState(omitRecordKey(pendingSearchAddsRef.current, actionKey))
       } else {
         setPendingSearchAddsState({
           ...pendingSearchAddsRef.current,
@@ -231,32 +240,31 @@ export function ShoppingListDetailPage() {
 
       patchItemInList(savedItem)
 
-      const { [actionKey]: _ignoredInFlight, ...remainingInFlight } = inFlightSearchAddsRef.current
-      inFlightSearchAddsRef.current = remainingInFlight
+      inFlightSearchAddsRef.current = omitRecordKey(inFlightSearchAddsRef.current, actionKey)
 
       if (remainingQuantity > 0) {
         scheduleSearchAddFlush(actionKey, 0)
       }
     } catch (flushError) {
-      const { [actionKey]: _ignoredInFlight, ...remainingInFlight } = inFlightSearchAddsRef.current
-      inFlightSearchAddsRef.current = remainingInFlight
+      inFlightSearchAddsRef.current = omitRecordKey(inFlightSearchAddsRef.current, actionKey)
       setError(flushError instanceof Error ? flushError.message : 'Kunde inte spara sökvalen.')
     } finally {
-      setBusySearchActionKeys((current) => {
-        const { [actionKey]: _ignoredBusyAction, ...remainingBusyActionKeys } = current
-        return remainingBusyActionKeys
-      })
+      setBusySearchActionKeys((current) => omitRecordKey(current, actionKey))
     }
-  })
+  }
 
-  const flushAllPendingSearchAdds = useEffectEvent(async () => {
+  flushPendingSearchAddRef.current = flushPendingSearchAdd
+
+  async function flushAllPendingSearchAdds() {
     const pendingActionKeys = Object.keys(pendingSearchAddsRef.current)
     for (const actionKey of pendingActionKeys) {
-      await flushPendingSearchAdd(actionKey)
+      await flushPendingSearchAddRef.current(actionKey)
     }
-  })
+  }
 
-  const flushPendingVarorAdjustment = useEffectEvent(async (itemId: string) => {
+  flushAllPendingSearchAddsRef.current = flushAllPendingSearchAdds
+
+  async function flushPendingVarorAdjustment(itemId: string) {
     const delta = pendingVarorAdjustmentsRef.current[itemId]
     if (!delta || inFlightVarorAdjustmentsRef.current[itemId]) {
       return
@@ -274,8 +282,7 @@ export function ShoppingListDetailPage() {
       const remainingDelta = (pendingVarorAdjustmentsRef.current[itemId] ?? 0) - delta
 
       if (remainingDelta === 0) {
-        const { [itemId]: _ignoredAdjustment, ...remainingAdjustments } = pendingVarorAdjustmentsRef.current
-        pendingVarorAdjustmentsRef.current = remainingAdjustments
+        pendingVarorAdjustmentsRef.current = omitRecordKey(pendingVarorAdjustmentsRef.current, itemId)
       } else {
         pendingVarorAdjustmentsRef.current = {
           ...pendingVarorAdjustmentsRef.current,
@@ -289,49 +296,51 @@ export function ShoppingListDetailPage() {
         patchItemInList(result.item)
       }
 
-      const { [itemId]: _ignoredInFlight, ...remainingInFlight } = inFlightVarorAdjustmentsRef.current
-      inFlightVarorAdjustmentsRef.current = remainingInFlight
+      inFlightVarorAdjustmentsRef.current = omitRecordKey(inFlightVarorAdjustmentsRef.current, itemId)
 
       if (remainingDelta !== 0) {
         scheduleVarorAdjustmentFlush(itemId, 0)
       }
     } catch (adjustError) {
-      const { [itemId]: _ignoredInFlight, ...remainingInFlight } = inFlightVarorAdjustmentsRef.current
-      inFlightVarorAdjustmentsRef.current = remainingInFlight
+      inFlightVarorAdjustmentsRef.current = omitRecordKey(inFlightVarorAdjustmentsRef.current, itemId)
       setError(adjustError instanceof Error ? adjustError.message : 'Kunde inte uppdatera antalet.')
     }
-  })
+  }
 
-  const flushAllPendingVarorAdjustments = useEffectEvent(async () => {
+  flushPendingVarorAdjustmentRef.current = flushPendingVarorAdjustment
+
+  async function flushAllPendingVarorAdjustments() {
     const pendingItemIds = Object.keys(pendingVarorAdjustmentsRef.current)
     for (const itemId of pendingItemIds) {
-      await flushPendingVarorAdjustment(itemId)
+      await flushPendingVarorAdjustmentRef.current(itemId)
     }
-  })
+  }
+
+  flushAllPendingVarorAdjustmentsRef.current = flushAllPendingVarorAdjustments
 
   useEffect(() => {
     const previousView = previousViewRef.current
     previousViewRef.current = currentView
 
     if (previousView === 'items' && currentView !== 'items') {
-      void flushAllPendingVarorAdjustments()
+      void flushAllPendingVarorAdjustmentsRef.current()
     }
 
     if (currentView === 'items' && (previousView === 'search' || previousView === 'search-expanded')) {
       searchInputRef.current?.blur()
     }
-  }, [currentView, flushAllPendingVarorAdjustments])
+  }, [currentView])
 
   useEffect(() => {
     function handlePageHide() {
-      void flushAllPendingSearchAdds()
-      void flushAllPendingVarorAdjustments()
+      void flushAllPendingSearchAddsRef.current()
+      void flushAllPendingVarorAdjustmentsRef.current()
     }
 
     function handleVisibilityChange() {
       if (document.visibilityState === 'hidden') {
-        void flushAllPendingSearchAdds()
-        void flushAllPendingVarorAdjustments()
+        void flushAllPendingSearchAddsRef.current()
+        void flushAllPendingVarorAdjustmentsRef.current()
       }
     }
 
@@ -468,8 +477,7 @@ export function ShoppingListDetailPage() {
     }
 
     window.clearTimeout(timeoutId)
-    const { [actionKey]: _ignoredTimeout, ...remainingTimeouts } = searchAddTimeoutsRef.current
-    searchAddTimeoutsRef.current = remainingTimeouts
+    searchAddTimeoutsRef.current = omitRecordKey(searchAddTimeoutsRef.current, actionKey)
   }
 
   function clearAllSearchAddTimeouts() {
@@ -490,7 +498,7 @@ export function ShoppingListDetailPage() {
       ...searchAddTimeoutsRef.current,
       [actionKey]: window.setTimeout(() => {
         clearSearchAddTimeout(actionKey)
-        void flushPendingSearchAdd(actionKey)
+        void flushPendingSearchAddRef.current(actionKey)
       }, delay),
     }
   }
@@ -518,8 +526,7 @@ export function ShoppingListDetailPage() {
     }
 
     if (currentPendingAdd.quantity <= 1) {
-      const { [actionKey]: _ignored, ...remainingPendingSearchAdds } = pendingSearchAddsRef.current
-      setPendingSearchAddsState(remainingPendingSearchAdds)
+      setPendingSearchAddsState(omitRecordKey(pendingSearchAddsRef.current, actionKey))
       clearSearchAddTimeout(actionKey)
       return
     }
@@ -571,8 +578,7 @@ export function ShoppingListDetailPage() {
     }
 
     window.clearTimeout(timeoutId)
-    const { [itemId]: _ignoredTimeout, ...remainingTimeouts } = varorAdjustmentTimeoutsRef.current
-    varorAdjustmentTimeoutsRef.current = remainingTimeouts
+    varorAdjustmentTimeoutsRef.current = omitRecordKey(varorAdjustmentTimeoutsRef.current, itemId)
   }
 
   function clearAllVarorAdjustmentTimeouts() {
@@ -593,7 +599,7 @@ export function ShoppingListDetailPage() {
       ...varorAdjustmentTimeoutsRef.current,
       [itemId]: window.setTimeout(() => {
         clearVarorAdjustmentTimeout(itemId)
-        void flushPendingVarorAdjustment(itemId)
+        void flushPendingVarorAdjustmentRef.current(itemId)
       }, delay),
     }
   }
@@ -655,8 +661,7 @@ export function ShoppingListDetailPage() {
     applyVarorQuantityDelta(item.id, delta)
     const nextDelta = (pendingVarorAdjustmentsRef.current[item.id] ?? 0) + delta
     if (nextDelta === 0) {
-      const { [item.id]: _ignoredAdjustment, ...remainingAdjustments } = pendingVarorAdjustmentsRef.current
-      pendingVarorAdjustmentsRef.current = remainingAdjustments
+      pendingVarorAdjustmentsRef.current = omitRecordKey(pendingVarorAdjustmentsRef.current, item.id)
       clearVarorAdjustmentTimeout(item.id)
       return
     }
@@ -820,9 +825,9 @@ export function ShoppingListDetailPage() {
           className="header-action"
           onClick={() => {
             void (async () => {
-              await flushAllPendingVarorAdjustments()
-              await flushAllPendingSearchAdds()
-              await loadList()
+              await flushAllPendingVarorAdjustmentsRef.current()
+              await flushAllPendingSearchAddsRef.current()
+              await loadListRef.current()
             })()
           }}
           type="button"
@@ -924,4 +929,10 @@ export function ShoppingListDetailPage() {
       </nav>
     </main>
   )
+}
+
+function omitRecordKey<T>(record: Record<string, T>, key: string) {
+  const nextRecord = { ...record }
+  delete nextRecord[key]
+  return nextRecord
 }

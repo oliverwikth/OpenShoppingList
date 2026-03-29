@@ -51,7 +51,7 @@ describe('SettingsPage', () => {
                 path: '/api/lists/stats',
                 httpMethod: 'GET',
                 actorDisplayName: 'anna',
-                detailsJson: '{\"status\":400}',
+                detailsJson: '{"status":400}',
                 occurredAt: '2026-03-29T09:10:00Z',
               },
             ],
