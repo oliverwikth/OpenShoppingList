@@ -35,7 +35,7 @@ public class ShoppingListQueryService {
 
     @Transactional(readOnly = true)
     public List<ShoppingListOverviewView> findAllLists() {
-        return shoppingListRepository.findAll().stream()
+        return shoppingListRepository.findActive().stream()
                 .sorted(Comparator.comparing(ShoppingList::getUpdatedAt).reversed())
                 .map(this::toOverviewView)
                 .toList();
@@ -43,12 +43,12 @@ public class ShoppingListQueryService {
 
     @Transactional(readOnly = true)
     public ShoppingListOverviewPageView findListsPage(Integer requestedPage, Integer requestedPageSize) {
-        long totalItems = shoppingListRepository.count();
+        long totalItems = shoppingListRepository.countActive();
         int safePageSize = resolvePageSize(requestedPageSize, totalItems);
         int totalPages = Math.max(1, (int) Math.ceil(totalItems / (double) safePageSize));
         int page = requestedPage == null ? 1 : Math.max(1, Math.min(requestedPage, totalPages));
 
-        List<ShoppingListOverviewView> items = shoppingListRepository.findPage(page - 1, safePageSize).stream()
+        List<ShoppingListOverviewView> items = shoppingListRepository.findActivePage(page - 1, safePageSize).stream()
                 .map(this::toOverviewView)
                 .toList();
 

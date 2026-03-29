@@ -133,6 +133,43 @@ class ShoppingListApiIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void hidesArchivedListsFromTheOverview() throws Exception {
+        MvcResult archivedListResult = mockMvc.perform(post("/api/lists")
+                        .header(ActorDisplayName.HEADER_NAME, "anna")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Veckohandling"}
+                                """))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        mockMvc.perform(post("/api/lists")
+                        .header(ActorDisplayName.HEADER_NAME, "anna")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Helgmiddag"}
+                                """))
+                .andExpect(status().isOk());
+
+        String archivedListId = readId(archivedListResult);
+
+        mockMvc.perform(post("/api/lists/{listId}/archive", archivedListId)
+                        .header(ActorDisplayName.HEADER_NAME, "anna"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ARCHIVED"));
+
+        mockMvc.perform(get("/api/lists")
+                        .param("page", "1")
+                        .param("pageSize", "5"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalItems").value(1))
+                .andExpect(jsonPath("$.totalPages").value(1))
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].name").value("Helgmiddag"))
+                .andExpect(jsonPath("$.items[0].status").value("ACTIVE"));
+    }
+
+    @Test
     void ordersPaginatedListOverviewByCreatedTimeInsteadOfUpdatedTime() throws Exception {
         importWillysList("Att handla 18 januari 2025", LocalDate.parse("2025-01-18"), 10.0, "100-old_ST");
         importWillysList("Att handla 8 mars 2026", LocalDate.parse("2026-03-08"), 20.0, "100-new_ST");

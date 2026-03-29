@@ -15,12 +15,26 @@ interface SpringDataShoppingListRepository extends JpaRepository<ShoppingList, U
     @EntityGraph(attributePaths = "items")
     java.util.List<ShoppingList> findAll();
 
+    @EntityGraph(attributePaths = "items")
+    @Query("select shoppingList from ShoppingList shoppingList where shoppingList.archivedAt is null")
+    java.util.List<ShoppingList> findAllActive();
+
     @Override
     @EntityGraph(attributePaths = "items")
     java.util.Optional<ShoppingList> findById(UUID id);
 
     @Query("select shoppingList.id from ShoppingList shoppingList order by shoppingList.createdAt desc, shoppingList.id desc")
     Page<UUID> findPageOfIds(Pageable pageable);
+
+    @Query("""
+            select shoppingList.id
+            from ShoppingList shoppingList
+            where shoppingList.archivedAt is null
+            order by shoppingList.createdAt desc, shoppingList.id desc
+            """)
+    Page<UUID> findActivePageOfIds(Pageable pageable);
+
+    long countByArchivedAtIsNull();
 
     @EntityGraph(attributePaths = "items")
     java.util.List<ShoppingList> findByIdIn(Collection<UUID> ids);

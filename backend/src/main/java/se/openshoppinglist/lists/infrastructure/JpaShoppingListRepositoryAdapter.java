@@ -30,6 +30,11 @@ class JpaShoppingListRepositoryAdapter implements ShoppingListRepository {
     }
 
     @Override
+    public List<ShoppingList> findActive() {
+        return repository.findAllActive();
+    }
+
+    @Override
     public List<ShoppingList> findPage(int pageNumber, int pageSize) {
         List<UUID> ids = repository.findPageOfIds(PageRequest.of(pageNumber, pageSize)).getContent();
         if (ids.isEmpty()) {
@@ -46,8 +51,29 @@ class JpaShoppingListRepositoryAdapter implements ShoppingListRepository {
     }
 
     @Override
+    public List<ShoppingList> findActivePage(int pageNumber, int pageSize) {
+        List<UUID> ids = repository.findActivePageOfIds(PageRequest.of(pageNumber, pageSize)).getContent();
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+
+        java.util.Map<UUID, Integer> order = java.util.stream.IntStream.range(0, ids.size())
+                .boxed()
+                .collect(Collectors.toMap(ids::get, Function.identity()));
+
+        return repository.findByIdIn(ids).stream()
+                .sorted(java.util.Comparator.comparingInt(list -> order.getOrDefault(list.getId(), Integer.MAX_VALUE)))
+                .toList();
+    }
+
+    @Override
     public long count() {
         return repository.count();
+    }
+
+    @Override
+    public long countActive() {
+        return repository.countByArchivedAtIsNull();
     }
 
     @Override

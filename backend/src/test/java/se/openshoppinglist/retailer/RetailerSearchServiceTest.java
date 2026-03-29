@@ -231,13 +231,28 @@ class RetailerSearchServiceTest {
             }
 
             @Override
+            public List<ShoppingList> findActive() {
+                throw new UnsupportedOperationException("findActive");
+            }
+
+            @Override
             public List<ShoppingList> findPage(int pageNumber, int pageSize) {
                 throw new UnsupportedOperationException("findPage");
             }
 
             @Override
+            public List<ShoppingList> findActivePage(int pageNumber, int pageSize) {
+                throw new UnsupportedOperationException("findActivePage");
+            }
+
+            @Override
             public long count() {
                 return shoppingLists.length;
+            }
+
+            @Override
+            public long countActive() {
+                throw new UnsupportedOperationException("countActive");
             }
 
             @Override
