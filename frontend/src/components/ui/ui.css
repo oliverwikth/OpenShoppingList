@@ -355,10 +355,19 @@
   height: 300px;
 }
 
+/* Prevent iOS Safari from turning chart labels/SVG into selected content on long press. */
+.stats-chart-stage,
+.stats-chart-stage * {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 .stats-chart {
   display: block;
   width: 100%;
   height: 100%;
+  pointer-events: none;
 }
 
 .stats-chart__grid {
@@ -404,6 +413,7 @@
   color: var(--muted);
   font-size: 0.76rem;
   font-weight: 700;
+  pointer-events: none;
 }
 
 .stats-chart__footer span {
@@ -441,6 +451,7 @@
   background: transparent;
   transform: translate(-50%, -50%);
   touch-action: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .stats-chart__hotspot-core {

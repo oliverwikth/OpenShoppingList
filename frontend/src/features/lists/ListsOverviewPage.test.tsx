@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { AppShell } from '../../app/AppShell'
 
@@ -253,6 +254,7 @@ describe('ListsOverviewPage', () => {
   })
 
   it('loads the statistics page and lets the user switch ranges', async () => {
+    const user = userEvent.setup()
     const fetchMock = vi.spyOn(globalThis, 'fetch')
 
     fetchMock.mockResolvedValueOnce(
@@ -333,7 +335,7 @@ describe('ListsOverviewPage', () => {
     expect(screen.getByRole('tab', { name: 'i år' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: '1 år' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'All time' })).toBeInTheDocument()
-    expect(screen.getByText('Tryck på punkterna för datum och värden')).toBeInTheDocument()
+    expect(screen.getByText('Tryck på en punkt för datum och värden')).toBeInTheDocument()
 
     const monthLinePath = container.querySelector('.stats-chart__line')?.getAttribute('d')
     expect(monthLinePath).toContain('M 16.00 18.00')
@@ -344,13 +346,22 @@ describe('ListsOverviewPage', () => {
 
     expect(screen.getByRole('button', { name: /Visa 1 mars 2026: 800/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Visa 15 mars 2026: 200/ })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Visa 28 mars 2026: 499/ })).toBeInTheDocument()
+    const latestPoint = screen.getByRole('button', { name: /Visa 28 mars 2026: 499/ })
+    expect(latestPoint).toBeInTheDocument()
     expect(screen.getByText('1 mars')).toBeInTheDocument()
     expect(screen.getByText('15 mars')).toBeInTheDocument()
     expect(screen.getByText('28 mars')).toBeInTheDocument()
     expect(screen.queryByText('8 mars')).not.toBeInTheDocument()
+    expect(container.querySelector('.stats-chart-tooltip')).toBeNull()
+
+    await user.click(latestPoint)
+
     expect(container.querySelector('.stats-chart-tooltip')?.textContent).toContain('499')
     expect(container.querySelector('.stats-chart-tooltip')?.textContent).toContain('9 varor')
+
+    await user.click(latestPoint)
+
+    expect(container.querySelector('.stats-chart-tooltip')).toBeNull()
 
     fireEvent.click(screen.getByRole('tab', { name: '1 år' }))
 

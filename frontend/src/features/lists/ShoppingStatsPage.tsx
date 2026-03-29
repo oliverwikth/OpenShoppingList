@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { fetchStats } from './api'
 import { HomeViewSwitch } from './HomeViewSwitch'
@@ -56,8 +56,7 @@ export function ShoppingStatsPage() {
   const [stats, setStats] = useState<ShoppingStats | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [heldPointIndex, setHeldPointIndex] = useState<number | null>(null)
-  const holdTimerRef = useRef<number | null>(null)
+  const [selectedPointIndex, setSelectedPointIndex] = useState<number | null>(null)
   const range = resolveStatsRange(searchParams.get('range'))
 
   useEffect(() => {
@@ -69,15 +68,12 @@ export function ShoppingStatsPage() {
   const listDelta = calculateDelta(stats?.activeListCount ?? 0, stats?.previousActiveListCount ?? null)
   const averageDelta = calculateDelta(stats?.averagePricedItemAmount ?? 0, stats?.previousAveragePricedItemAmount ?? null)
   const chart = useMemo(() => buildStatsChart(stats?.spendSeries ?? [], range, stats?.currency ?? null), [stats?.spendSeries, range, stats?.currency])
-  const selectedPoint = useMemo(() => resolveSelectedPoint(chart, heldPointIndex), [chart, heldPointIndex])
+  const selectedPoint = useMemo(() => resolveSelectedPoint(chart, selectedPointIndex), [chart, selectedPointIndex])
   const topQuantity = stats?.topItems[0]?.quantity ?? 0
 
   useEffect(() => {
-    setHeldPointIndex(null)
-    clearHoldTimer()
+    setSelectedPointIndex(null)
   }, [chart?.linePath])
-
-  useEffect(() => () => clearHoldTimer(), [])
 
   async function loadStats(nextRange: StatsRange) {
     setIsLoading(true)
@@ -101,24 +97,12 @@ export function ShoppingStatsPage() {
     setSearchParams(nextSearchParams, { replace: true })
   }
 
-  function clearHoldTimer() {
-    if (holdTimerRef.current !== null) {
-      window.clearTimeout(holdTimerRef.current)
-      holdTimerRef.current = null
-    }
+  function toggleSelectedPoint(index: number) {
+    setSelectedPointIndex((currentIndex) => (currentIndex === index ? null : index))
   }
 
-  function startPointHold(index: number) {
-    clearHoldTimer()
-    holdTimerRef.current = window.setTimeout(() => {
-      setHeldPointIndex(index)
-      holdTimerRef.current = null
-    }, 220)
-  }
-
-  function stopPointHold() {
-    clearHoldTimer()
-    setHeldPointIndex(null)
+  function clearSelectedPoint() {
+    setSelectedPointIndex(null)
   }
 
   const summaryValue = spendDelta.percentage === null
@@ -188,7 +172,7 @@ export function ShoppingStatsPage() {
                       <span className="stats-market-legend__dot" />
                       Listkostnad
                     </span>
-                    <span className="stats-market-legend__hint">Håll ned en punkt för datum och värden</span>
+                    <span className="stats-market-legend__hint">Tryck på en punkt för datum och värden</span>
                   </div>
                 </div>
 
@@ -259,14 +243,11 @@ export function ShoppingStatsPage() {
                           {chart.plottedPoints.map((point) => (
                             <button
                               aria-label={`Visa ${formatTooltipDate(point.point.bucketStart, range)}: ${formatMoney(point.point.amount, stats.currency)}`}
+                              aria-pressed={selectedPoint?.index === point.index}
                               className={`stats-chart__hotspot ${selectedPoint?.index === point.index ? 'is-active' : ''}`}
                               key={point.index}
-                              onBlur={stopPointHold}
-                              onFocus={() => setHeldPointIndex(point.index)}
-                              onPointerCancel={stopPointHold}
-                              onPointerDown={() => startPointHold(point.index)}
-                              onPointerLeave={stopPointHold}
-                              onPointerUp={stopPointHold}
+                              onBlur={clearSelectedPoint}
+                              onClick={() => toggleSelectedPoint(point.index)}
                               style={{ left: `${point.xPercent}%`, top: `${point.yPercent}%` }}
                               type="button"
                             >
