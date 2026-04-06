@@ -60,3 +60,22 @@ app:
       connect-timeout: 3s
       read-timeout: 6s
       max-results: 12
+    coop:
+      base-url: https://external.api.coop.se
+      search-path: /personalization/search/products
+      api-version: v1
+      store: 251300
+      device: desktop
+      subscription-key: 3becf0ce306f41a1ae94077c16798187
+      connect-timeout: 3s
+      read-timeout: 6s
+      max-results: 12
+    ica:
+      base-url: https://handlaprivatkund.ica.se
+      search-path: /stores/{storeId}/api/webproductpagews/v6/product-pages/search
+      store-id: 1004293
+      tag: web
+      max-products-to-decorate: 50
+      max-results: 12
+      connect-timeout: 3s
+      read-timeout: 6s

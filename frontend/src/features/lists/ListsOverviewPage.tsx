@@ -18,15 +18,13 @@ const PAGE_SIZE_OPTIONS: Array<{ value: ListPageSize; label: string }> = [
   { value: 'all', label: 'Alla' },
 ]
 
-type ProviderPickerOption =
-  | { value: ShoppingListProvider; label: string; logoSrc: string; enabled: true }
-  | { value: 'ica' | 'coop'; label: string; logoSrc: string; enabled: false }
+type ProviderPickerOption = { value: ShoppingListProvider; label: string; logoSrc: string }
 
 const LIST_PROVIDER_OPTIONS: Array<ProviderPickerOption> = [
-  { value: 'willys', label: 'Willys', logoSrc: '/willys-logo.svg', enabled: true },
-  { value: 'lidl', label: 'Lidl', logoSrc: '/lidl-logo.svg', enabled: true },
-  { value: 'ica', label: 'ICA', logoSrc: '/ica-logo.svg', enabled: false },
-  { value: 'coop', label: 'Coop', logoSrc: '/coop-logo.svg', enabled: false },
+  { value: 'willys', label: 'Willys', logoSrc: '/willys-logo.svg' },
+  { value: 'lidl', label: 'Lidl', logoSrc: '/lidl-logo.svg' },
+  { value: 'ica', label: 'ICA', logoSrc: '/ica-logo.svg' },
+  { value: 'coop', label: 'Coop', logoSrc: '/coop-logo.svg' },
 ]
 
 function getDefaultListTitle() {
@@ -323,18 +321,14 @@ export function ListsOverviewPage() {
                   return (
                     <button
                       aria-checked={isSelected}
-                      aria-disabled={!option.enabled}
                       aria-label={option.label}
-                      className={`provider-option ${isSelected ? 'is-selected' : ''} ${option.enabled ? '' : 'is-disabled'}`}
-                      disabled={!option.enabled}
+                      className={`provider-option ${isSelected ? 'is-selected' : ''}`}
                       key={option.value}
                       onClick={() => {
-                        if (option.enabled) {
-                          setNewListProvider(option.value)
-                        }
+                        setNewListProvider(option.value)
                       }}
                       role="radio"
-                      title={option.enabled ? option.label : `${option.label} kommer snart`}
+                      title={option.label}
                       type="button"
                     >
                       <img alt="" className="provider-option__logo" src={option.logoSrc} />

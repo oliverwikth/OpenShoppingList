@@ -13,7 +13,12 @@ public record AppProperties(
     public record CorsProperties(List<String> allowedOriginPatterns) {
     }
 
-    public record RetailerProperties(WillysProperties willys, LidlProperties lidl) {
+    public record RetailerProperties(
+            WillysProperties willys,
+            LidlProperties lidl,
+            CoopProperties coop,
+            IcaProperties ica
+    ) {
     }
 
     public record WillysProperties(
@@ -35,6 +40,31 @@ public record AppProperties(
             Duration connectTimeout,
             Duration readTimeout,
             int maxResults
+    ) {
+    }
+
+    public record CoopProperties(
+            String baseUrl,
+            String searchPath,
+            String apiVersion,
+            String store,
+            String device,
+            String subscriptionKey,
+            Duration connectTimeout,
+            Duration readTimeout,
+            int maxResults
+    ) {
+    }
+
+    public record IcaProperties(
+            String baseUrl,
+            String searchPath,
+            String storeId,
+            String tag,
+            int maxProductsToDecorate,
+            int maxResults,
+            Duration connectTimeout,
+            Duration readTimeout
     ) {
     }
 }

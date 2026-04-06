@@ -13,11 +13,29 @@ class RestClientConfiguration {
     @Qualifier("willysRestClient")
     RestClient willysRestClient(AppProperties properties) {
         AppProperties.WillysProperties willys = properties.retailer().willys();
+        return buildRestClient(willys.baseUrl(), willys.connectTimeout(), willys.readTimeout());
+    }
+
+    @Bean
+    @Qualifier("coopRestClient")
+    RestClient coopRestClient(AppProperties properties) {
+        AppProperties.CoopProperties coop = properties.retailer().coop();
+        return buildRestClient(coop.baseUrl(), coop.connectTimeout(), coop.readTimeout());
+    }
+
+    @Bean
+    @Qualifier("icaRestClient")
+    RestClient icaRestClient(AppProperties properties) {
+        AppProperties.IcaProperties ica = properties.retailer().ica();
+        return buildRestClient(ica.baseUrl(), ica.connectTimeout(), ica.readTimeout());
+    }
+
+    private RestClient buildRestClient(String baseUrl, java.time.Duration connectTimeout, java.time.Duration readTimeout) {
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-        requestFactory.setConnectTimeout(Math.toIntExact(willys.connectTimeout().toMillis()));
-        requestFactory.setReadTimeout(Math.toIntExact(willys.readTimeout().toMillis()));
+        requestFactory.setConnectTimeout(Math.toIntExact(connectTimeout.toMillis()));
+        requestFactory.setReadTimeout(Math.toIntExact(readTimeout.toMillis()));
         return RestClient.builder()
-                .baseUrl(willys.baseUrl())
+                .baseUrl(baseUrl)
                 .requestFactory(requestFactory)
                 .build();
     }

@@ -1,6 +1,6 @@
 export type ShoppingListStatus = 'ACTIVE' | 'ARCHIVED'
 export type ShoppingListItemType = 'MANUAL' | 'EXTERNAL_ARTICLE'
-export type ShoppingListProvider = 'willys' | 'lidl'
+export type ShoppingListProvider = 'willys' | 'lidl' | 'coop' | 'ica'
 
 export interface ShoppingListOverview {
   id: string

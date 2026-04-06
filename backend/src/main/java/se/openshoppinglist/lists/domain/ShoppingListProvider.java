@@ -4,7 +4,9 @@ import java.util.Arrays;
 
 public enum ShoppingListProvider {
     WILLYS("willys"),
-    LIDL("lidl");
+    LIDL("lidl"),
+    COOP("coop"),
+    ICA("ica");
 
     private final String id;
 
