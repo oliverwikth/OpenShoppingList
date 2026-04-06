@@ -23,8 +23,8 @@ type ProviderPickerOption = { value: ShoppingListProvider; label: string; logoSr
 const LIST_PROVIDER_OPTIONS: Array<ProviderPickerOption> = [
   { value: 'willys', label: 'Willys', logoSrc: '/willys-logo.svg' },
   { value: 'lidl', label: 'Lidl', logoSrc: '/lidl-logo.svg' },
-  { value: 'ica', label: 'ICA', logoSrc: '/ica-logo.svg' },
-  { value: 'coop', label: 'Coop', logoSrc: '/coop-logo.svg' },
+  { value: 'ica', label: 'ICA', logoSrc: '/ica-logo.png' },
+  { value: 'coop', label: 'Coop', logoSrc: '/coop-logo.png' },
 ]
 
 function getDefaultListTitle() {
