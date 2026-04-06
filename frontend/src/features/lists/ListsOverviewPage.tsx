@@ -18,12 +18,11 @@ const PAGE_SIZE_OPTIONS: Array<{ value: ListPageSize; label: string }> = [
   { value: 'all', label: 'Alla' },
 ]
 
-const LIST_PROVIDER_OPTIONS: Array<{
-  value: ShoppingListProvider | 'ica' | 'coop'
-  label: string
-  logoSrc: string
-  enabled: boolean
-}> = [
+type ProviderPickerOption =
+  | { value: ShoppingListProvider; label: string; logoSrc: string; enabled: true }
+  | { value: 'ica' | 'coop'; label: string; logoSrc: string; enabled: false }
+
+const LIST_PROVIDER_OPTIONS: Array<ProviderPickerOption> = [
   { value: 'willys', label: 'Willys', logoSrc: '/willys-logo.svg', enabled: true },
   { value: 'lidl', label: 'Lidl', logoSrc: '/lidl-logo.svg', enabled: true },
   { value: 'ica', label: 'ICA', logoSrc: '/ica-logo.svg', enabled: false },
