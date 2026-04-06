@@ -27,6 +27,8 @@ class IcaRetailerSearchAdapter implements RetailerSearchPort {
     private static final String RETAILER_NAME = "ICA";
     private static final Pattern UNIT_PATTERN = Pattern.compile("(?i)\\b\\d+(?:[.,]\\d+)?\\s*(kg|g|mg|l|dl|cl|ml|st)\\b");
     private static final String SESSION_ID_CHARS = "abcdefghijklmnopqrstuvwxyz0123456789";
+    private static final String ICA_IMAGE_UPLOAD_SEGMENT = "https://assets.icanet.se/image/upload/";
+    private static final String ICA_OPTIMIZED_IMAGE_PREFIX = "https://assets.icanet.se/cs_srgb/t_product_medium_v1/dpr_1/";
 
     private final RestClient siteRestClient;
     private final RestClient searchRestClient;
@@ -113,7 +115,7 @@ class IcaRetailerSearchAdapter implements RetailerSearchPort {
                 firstNonBlank(product.consumerItemId(), firstNonBlank(product.gtin(), title)),
                 title,
                 null,
-                product.image(),
+                optimizeImageUrl(product.image()),
                 category,
                 priceAmount,
                 priceAmount == null ? null : "SEK",
@@ -193,6 +195,22 @@ class IcaRetailerSearchAdapter implements RetailerSearchPort {
             builder.append(SESSION_ID_CHARS.charAt(random.nextInt(SESSION_ID_CHARS.length())));
         }
         return builder.toString();
+    }
+
+    private String optimizeImageUrl(String imageUrl) {
+        if (imageUrl == null || imageUrl.isBlank()) {
+            return null;
+        }
+        if (!imageUrl.startsWith(ICA_IMAGE_UPLOAD_SEGMENT)) {
+            return imageUrl;
+        }
+
+        String path = imageUrl.substring(ICA_IMAGE_UPLOAD_SEGMENT.length());
+        int extensionIndex = path.lastIndexOf('.');
+        if (extensionIndex >= 0) {
+            path = path.substring(0, extensionIndex);
+        }
+        return ICA_OPTIMIZED_IMAGE_PREFIX + path;
     }
 
     private String firstNonBlank(String primary, String fallback) {

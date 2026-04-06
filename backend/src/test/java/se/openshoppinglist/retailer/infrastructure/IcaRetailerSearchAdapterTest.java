@@ -89,7 +89,7 @@ class IcaRetailerSearchAdapterTest {
             assertThat(result.provider()).isEqualTo("ica");
             assertThat(result.articleId()).isEqualTo("1487023");
             assertThat(result.title()).isEqualTo("Mjölk 3% 1l ICA");
-            assertThat(result.imageUrl()).isEqualTo("https://assets.icanet.se/image/upload/v1668772604/rhx7qka4tp8aosnbkyjd.png");
+            assertThat(result.imageUrl()).isEqualTo("https://assets.icanet.se/cs_srgb/t_product_medium_v1/dpr_1/v1668772604/rhx7qka4tp8aosnbkyjd");
             assertThat(result.category()).isEqualTo("Mejeri");
             assertThat(result.priceAmount()).isEqualByComparingTo("12.25");
             assertThat(result.pricing()).isNotNull();
