@@ -6,6 +6,7 @@ import type {
   ShoppingListItem,
   ShoppingListOverview,
   ShoppingListOverviewPage,
+  ShoppingListProvider,
   ShoppingStats,
 } from '../../shared/types/api'
 
@@ -17,11 +18,11 @@ export function fetchLists(page: number, pageSize: number | 'all') {
   return apiRequest<ShoppingListOverviewPage>(`/api/lists?${params.toString()}`)
 }
 
-export function createList(actorName: string, name: string) {
+export function createList(actorName: string, name: string, provider: ShoppingListProvider) {
   return apiRequest<ShoppingListOverview>('/api/lists', {
     method: 'POST',
     actorName,
-    body: { name },
+    body: { name, provider },
   })
 }
 

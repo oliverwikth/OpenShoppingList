@@ -6,7 +6,7 @@ import { archiveList, createList, fetchLists } from './api'
 import { HomeViewSwitch } from './HomeViewSwitch'
 import { useActorName } from '../actor/useActorName'
 import { toTitledName } from '../../shared/displayName'
-import type { ShoppingListOverview, ShoppingListOverviewPage } from '../../shared/types/api'
+import type { ShoppingListOverview, ShoppingListOverviewPage, ShoppingListProvider } from '../../shared/types/api'
 import '../../components/ui/ui.css'
 
 type ListPageSize = 5 | 10 | 20 | 'all'
@@ -16,6 +16,11 @@ const PAGE_SIZE_OPTIONS: Array<{ value: ListPageSize; label: string }> = [
   { value: 10, label: '10' },
   { value: 20, label: '20' },
   { value: 'all', label: 'Alla' },
+]
+
+const LIST_PROVIDER_OPTIONS: Array<{ value: ShoppingListProvider; label: string }> = [
+  { value: 'willys', label: 'Willys' },
+  { value: 'lidl', label: 'Lidl' },
 ]
 
 function getDefaultListTitle() {
@@ -32,6 +37,7 @@ export function ListsOverviewPage() {
   const navigate = useNavigate()
   const [listPage, setListPage] = useState<ShoppingListOverviewPage | null>(null)
   const [newListName, setNewListName] = useState(getDefaultListTitle)
+  const [newListProvider, setNewListProvider] = useState<ShoppingListProvider>('willys')
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
@@ -131,7 +137,7 @@ export function ListsOverviewPage() {
     setIsSaving(true)
     setError(null)
     try {
-      const createdList = await createList(actorName, newListName.trim())
+      const createdList = await createList(actorName, newListName.trim(), newListProvider)
       closeCreateDialog()
       navigate(`/${actorName}/lists/${createdList.id}/varor`)
     } catch (createError) {
@@ -143,12 +149,14 @@ export function ListsOverviewPage() {
 
   function openCreateDialog() {
     setNewListName(getDefaultListTitle())
+    setNewListProvider('willys')
     setIsCreateOpen(true)
   }
 
   function closeCreateDialog() {
     setIsCreateOpen(false)
     setNewListName(getDefaultListTitle())
+    setNewListProvider('willys')
   }
 
   function openArchiveDialog(list: ShoppingListOverview) {
@@ -301,6 +309,24 @@ export function ListsOverviewPage() {
               value={newListName}
               onChange={(event) => setNewListName(event.target.value)}
             />
+            <label className="lists-page-size">
+              <span>Butik</span>
+              <span className="lists-page-size__field">
+                <select
+                  aria-label="Butik"
+                  className="lists-page-size__select"
+                  onChange={(event) => setNewListProvider(event.target.value as ShoppingListProvider)}
+                  value={newListProvider}
+                >
+                  {LIST_PROVIDER_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <span aria-hidden="true" className="lists-page-size__chevron" />
+              </span>
+            </label>
             <button className="primary-pill" disabled={isSaving || !newListName.trim()} type="submit">
               {isSaving ? 'Skapar...' : 'Skapa lista'}
             </button>

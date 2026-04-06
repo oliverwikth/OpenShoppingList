@@ -1,9 +1,11 @@
 export type ShoppingListStatus = 'ACTIVE' | 'ARCHIVED'
 export type ShoppingListItemType = 'MANUAL' | 'EXTERNAL_ARTICLE'
+export type ShoppingListProvider = 'willys' | 'lidl'
 
 export interface ShoppingListOverview {
   id: string
   name: string
+  provider: ShoppingListProvider
   status: ShoppingListStatus
   itemCount: number
   checkedItemCount: number
@@ -69,6 +71,7 @@ export interface ActivityEntry {
 export interface ShoppingListDetail {
   id: string
   name: string
+  provider: ShoppingListProvider
   status: ShoppingListStatus
   createdAt: string
   updatedAt: string
@@ -225,6 +228,7 @@ export interface SettingsBackupItem {
 export interface SettingsBackupList {
   id: string
   name: string
+  provider: ShoppingListProvider
   status: ShoppingListStatus
   createdAt: string
   updatedAt: string

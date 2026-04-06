@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import se.openshoppinglist.actor.ActorDisplayName;
 import se.openshoppinglist.lists.application.CheckedItemActivityPayload;
 import se.openshoppinglist.lists.domain.ShoppingList;
+import se.openshoppinglist.lists.domain.ShoppingListProvider;
 import se.openshoppinglist.lists.domain.ShoppingListRepository;
 import se.openshoppinglist.lists.infrastructure.ItemActivityLogEntry;
 import se.openshoppinglist.lists.infrastructure.ItemActivityLogRepository;
@@ -32,19 +33,12 @@ class RetailerSearchServiceTest {
 
     @Test
     void rejectsBlankQueries() {
-        RetailerSearchService retailerSearchService = new RetailerSearchService((query, page) -> new RetailerSearchResponse(
-                "willys",
-                query,
-                page,
-                0,
-                0,
-                false,
-                true,
-                null,
-                List.of()
-        ), purchaseHistoryService(emptyRepository()));
+        RetailerSearchService retailerSearchService = retailerSearchService(
+                stubPort("willys", (query, page) -> new RetailerSearchResponse("willys", query, page, 0, 0, false, true, null, List.of())),
+                emptyRepository()
+        );
 
-        assertThatThrownBy(() -> retailerSearchService.search(" ", 0))
+        assertThatThrownBy(() -> retailerSearchService.search(UUID.randomUUID(), " ", 0))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("must not be blank");
     }
@@ -63,10 +57,14 @@ class RetailerSearchServiceTest {
                 null,
                 0
         );
-        RetailerSearchPort port = (query, page) -> new RetailerSearchResponse("willys", query, page, 3, 30, true, true, null, List.of(result));
-        RetailerSearchService retailerSearchService = new RetailerSearchService(port, purchaseHistoryService(emptyRepository()));
+        ShoppingList shoppingList = ShoppingList.create("Veckohandling", ShoppingListProvider.WILLYS, new ActorDisplayName("anna"), FIXED_CLOCK);
+        RetailerSearchPort port = stubPort(
+                "willys",
+                (query, page) -> new RetailerSearchResponse("willys", query, page, 3, 30, true, true, null, List.of(result))
+        );
+        RetailerSearchService retailerSearchService = retailerSearchService(port, repositoryWith(shoppingList));
 
-        RetailerSearchResponse response = retailerSearchService.search("kaffe", 1);
+        RetailerSearchResponse response = retailerSearchService.search(shoppingList.getId(), "kaffe", 1);
 
         assertThat(response.results()).containsExactly(result);
         assertThat(response.query()).isEqualTo("kaffe");
@@ -75,23 +73,26 @@ class RetailerSearchServiceTest {
 
     @Test
     void ranksPreviouslyBoughtExactArticlesBeforeOtherStoreResults() {
-        RetailerSearchPort port = (query, page) -> new RetailerSearchResponse(
+        RetailerSearchPort port = stubPort(
                 "willys",
-                query,
-                page,
-                1,
-                3,
-                false,
-                true,
-                null,
-                List.of(
-                        new RetailerArticleSearchResult("willys", "101", "Halloumi budget", "200g", null, null, null, null, null, 0),
-                        new RetailerArticleSearchResult("willys", "202", "Halloumi favorit", "200g", null, null, null, null, null, 0),
-                        new RetailerArticleSearchResult("willys", "303", "Halloumi premium", "200g", null, null, null, null, null, 0)
+                (query, page) -> new RetailerSearchResponse(
+                        "willys",
+                        query,
+                        page,
+                        1,
+                        3,
+                        false,
+                        true,
+                        null,
+                        List.of(
+                                new RetailerArticleSearchResult("willys", "101", "Halloumi budget", "200g", null, null, null, null, null, 0),
+                                new RetailerArticleSearchResult("willys", "202", "Halloumi favorit", "200g", null, null, null, null, null, 0),
+                                new RetailerArticleSearchResult("willys", "303", "Halloumi premium", "200g", null, null, null, null, null, 0)
+                        )
                 )
         );
 
-        ShoppingList shoppingList = ShoppingList.create("Veckohandling", new ActorDisplayName("anna"), FIXED_CLOCK);
+        ShoppingList shoppingList = ShoppingList.create("Veckohandling", ShoppingListProvider.WILLYS, new ActorDisplayName("anna"), FIXED_CLOCK);
         shoppingList.addExternalItem(
                 new ExternalArticleSnapshot("willys", "202", "Halloumi favorit", "200g", null, null, null, null, "{}"),
                 2,
@@ -100,9 +101,9 @@ class RetailerSearchServiceTest {
         );
         shoppingList.checkItem(shoppingList.getItems().getFirst().getId(), new ActorDisplayName("anna"), FIXED_CLOCK);
 
-        RetailerSearchService retailerSearchService = new RetailerSearchService(port, purchaseHistoryService(repositoryWith(shoppingList)));
+        RetailerSearchService retailerSearchService = retailerSearchService(port, repositoryWith(shoppingList));
 
-        RetailerSearchResponse response = retailerSearchService.search("halloumi", 0);
+        RetailerSearchResponse response = retailerSearchService.search(shoppingList.getId(), "halloumi", 0);
 
         assertThat(response.results())
                 .extracting(RetailerArticleSearchResult::articleId)
@@ -112,23 +113,26 @@ class RetailerSearchServiceTest {
 
     @Test
     void ranksPreviouslyCheckedImportedLikeTitlesAheadOfUnseenStoreResults() {
-        RetailerSearchPort port = (query, page) -> new RetailerSearchResponse(
+        RetailerSearchPort port = stubPort(
                 "willys",
-                query,
-                page,
-                1,
-                3,
-                false,
-                true,
-                null,
-                List.of(
-                        new RetailerArticleSearchResult("willys", "101", "Halloumi budget", "200g", null, null, null, null, null, 0),
-                        new RetailerArticleSearchResult("willys", "202", "Halloumi favorit", "200g", null, null, null, null, null, 0),
-                        new RetailerArticleSearchResult("willys", "303", "Halloumi premium", "200g", null, null, null, null, null, 0)
+                (query, page) -> new RetailerSearchResponse(
+                        "willys",
+                        query,
+                        page,
+                        1,
+                        3,
+                        false,
+                        true,
+                        null,
+                        List.of(
+                                new RetailerArticleSearchResult("willys", "101", "Halloumi budget", "200g", null, null, null, null, null, 0),
+                                new RetailerArticleSearchResult("willys", "202", "Halloumi favorit", "200g", null, null, null, null, null, 0),
+                                new RetailerArticleSearchResult("willys", "303", "Halloumi premium", "200g", null, null, null, null, null, 0)
+                        )
                 )
         );
 
-        ShoppingList shoppingList = ShoppingList.create("Importerad Willys-list", new ActorDisplayName("anna"), FIXED_CLOCK);
+        ShoppingList shoppingList = ShoppingList.create("Importerad Willys-list", ShoppingListProvider.WILLYS, new ActorDisplayName("anna"), FIXED_CLOCK);
         shoppingList.addManualItem("  Halloumi   favorit ", "Importerad mängd: 0.5 kg", new ActorDisplayName("anna"), FIXED_CLOCK);
         shoppingList.checkItem(shoppingList.getItems().getFirst().getId(), new ActorDisplayName("anna"), FIXED_CLOCK);
         shoppingList.uncheckItem(shoppingList.getItems().getFirst().getId(), new ActorDisplayName("anna"), FIXED_CLOCK);
@@ -143,11 +147,12 @@ class RetailerSearchServiceTest {
                 FIXED_CLOCK.instant()
         );
         RetailerSearchService retailerSearchService = new RetailerSearchService(
-                port,
-                purchaseHistoryService(repositoryWith(shoppingList), checkedEntry)
+                List.of(port),
+                purchaseHistoryService(repositoryWith(shoppingList), checkedEntry),
+                repositoryWith(shoppingList)
         );
 
-        RetailerSearchResponse response = retailerSearchService.search("halloumi", 0);
+        RetailerSearchResponse response = retailerSearchService.search(shoppingList.getId(), "halloumi", 0);
 
         assertThat(response.results())
                 .extracting(RetailerArticleSearchResult::articleId)
@@ -157,21 +162,40 @@ class RetailerSearchServiceTest {
 
     @Test
     void rejectsNegativePages() {
-        RetailerSearchService retailerSearchService = new RetailerSearchService((query, page) -> new RetailerSearchResponse(
-                "willys",
-                query,
-                page,
-                0,
-                0,
-                false,
-                true,
-                null,
-                List.of()
-        ), purchaseHistoryService(emptyRepository()));
+        ShoppingList shoppingList = ShoppingList.create("Veckohandling", ShoppingListProvider.WILLYS, new ActorDisplayName("anna"), FIXED_CLOCK);
+        RetailerSearchService retailerSearchService = retailerSearchService(
+                stubPort("willys", (query, page) -> new RetailerSearchResponse("willys", query, page, 0, 0, false, true, null, List.of())),
+                repositoryWith(shoppingList)
+        );
 
-        assertThatThrownBy(() -> retailerSearchService.search("kaffe", -1))
+        assertThatThrownBy(() -> retailerSearchService.search(shoppingList.getId(), "kaffe", -1))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("must not be negative");
+    }
+
+    private RetailerSearchService retailerSearchService(RetailerSearchPort port, ShoppingListRepository shoppingListRepository) {
+        return new RetailerSearchService(
+                List.of(port),
+                purchaseHistoryService(shoppingListRepository),
+                shoppingListRepository
+        );
+    }
+
+    private RetailerSearchPort stubPort(
+            String provider,
+            java.util.function.BiFunction<String, Integer, RetailerSearchResponse> handler
+    ) {
+        return new RetailerSearchPort() {
+            @Override
+            public String provider() {
+                return provider;
+            }
+
+            @Override
+            public RetailerSearchResponse search(String query, int page) {
+                return handler.apply(query, page);
+            }
+        };
     }
 
     private ShoppingListRepository emptyRepository() {

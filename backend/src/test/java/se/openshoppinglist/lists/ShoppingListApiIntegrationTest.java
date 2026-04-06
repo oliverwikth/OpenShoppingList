@@ -13,6 +13,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -52,12 +53,10 @@ class ShoppingListApiIntegrationTest extends PostgresIntegrationTest {
 
     @Test
     void createsListAddsManualItemAndChecksIt() throws Exception {
-        MvcResult createListResult = mockMvc.perform(post("/api/lists")
+                MvcResult createListResult = mockMvc.perform(post("/api/lists")
                         .header(ActorDisplayName.HEADER_NAME, "anna")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"name":"Veckohandling"}
-                                """))
+                        .content(createListRequestBody("Veckohandling")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("Veckohandling"))
                 .andReturn();
@@ -111,9 +110,7 @@ class ShoppingListApiIntegrationTest extends PostgresIntegrationTest {
             mockMvc.perform(post("/api/lists")
                             .header(ActorDisplayName.HEADER_NAME, "anna")
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content("""
-                                    {"name":"Lista %s"}
-                                    """.formatted(index)))
+                            .content(createListRequestBody("Lista %s".formatted(index))))
                     .andExpect(status().isOk());
         }
 
@@ -145,18 +142,14 @@ class ShoppingListApiIntegrationTest extends PostgresIntegrationTest {
         MvcResult archivedListResult = mockMvc.perform(post("/api/lists")
                         .header(ActorDisplayName.HEADER_NAME, "anna")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"name":"Veckohandling"}
-                                """))
+                        .content(createListRequestBody("Veckohandling")))
                 .andExpect(status().isOk())
                 .andReturn();
 
         mockMvc.perform(post("/api/lists")
                         .header(ActorDisplayName.HEADER_NAME, "anna")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"name":"Helgmiddag"}
-                                """))
+                        .content(createListRequestBody("Helgmiddag")))
                 .andExpect(status().isOk());
 
         String archivedListId = readId(archivedListResult);
@@ -182,9 +175,7 @@ class ShoppingListApiIntegrationTest extends PostgresIntegrationTest {
         MvcResult archivedListResult = mockMvc.perform(post("/api/lists")
                         .header(ActorDisplayName.HEADER_NAME, "anna")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"name":"Veckohandling"}
-                                """))
+                        .content(createListRequestBody("Veckohandling")))
                 .andExpect(status().isOk())
                 .andReturn();
 
@@ -227,9 +218,7 @@ class ShoppingListApiIntegrationTest extends PostgresIntegrationTest {
         MvcResult activeListResult = mockMvc.perform(post("/api/lists")
                         .header(ActorDisplayName.HEADER_NAME, "anna")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"name":"Veckohandling"}
-                                """))
+                        .content(createListRequestBody("Veckohandling")))
                 .andExpect(status().isOk())
                 .andReturn();
 
@@ -284,9 +273,7 @@ class ShoppingListApiIntegrationTest extends PostgresIntegrationTest {
         MvcResult archivedListResult = mockMvc.perform(post("/api/lists")
                         .header(ActorDisplayName.HEADER_NAME, "anna")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"name":"Helgmiddag"}
-                                """))
+                        .content(createListRequestBody("Helgmiddag")))
                 .andExpect(status().isOk())
                 .andReturn();
 
@@ -353,9 +340,7 @@ class ShoppingListApiIntegrationTest extends PostgresIntegrationTest {
         mockMvc.perform(post("/api/lists")
                         .header(ActorDisplayName.HEADER_NAME, "anna")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"name":"Veckohandling"}
-                                """))
+                        .content(createListRequestBody("Veckohandling")))
                 .andExpect(status().isOk());
 
         mockMvc.perform(post("/api/settings/backup/import")
@@ -409,9 +394,7 @@ class ShoppingListApiIntegrationTest extends PostgresIntegrationTest {
         MvcResult createListResult = mockMvc.perform(post("/api/lists")
                         .header(ActorDisplayName.HEADER_NAME, "anna")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"name":"Veckohandling"}
-                                """))
+                        .content(createListRequestBody("Veckohandling")))
                 .andExpect(status().isOk())
                 .andReturn();
 
@@ -468,9 +451,7 @@ class ShoppingListApiIntegrationTest extends PostgresIntegrationTest {
         MvcResult createListResult = mockMvc.perform(post("/api/lists")
                         .header(ActorDisplayName.HEADER_NAME, "anna")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"name":"Veckohandling"}
-                                """))
+                        .content(createListRequestBody("Veckohandling")))
                 .andExpect(status().isOk())
                 .andReturn();
 
@@ -521,9 +502,7 @@ class ShoppingListApiIntegrationTest extends PostgresIntegrationTest {
         MvcResult createListResult = mockMvc.perform(post("/api/lists")
                         .header(ActorDisplayName.HEADER_NAME, "anna")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"name":"Veckohandling"}
-                                """))
+                        .content(createListRequestBody("Veckohandling")))
                 .andExpect(status().isOk())
                 .andReturn();
 
@@ -548,9 +527,7 @@ class ShoppingListApiIntegrationTest extends PostgresIntegrationTest {
         MvcResult createListResult = mockMvc.perform(post("/api/lists")
                         .header(ActorDisplayName.HEADER_NAME, "anna")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"name":"Veckohandling"}
-                                """))
+                        .content(createListRequestBody("Veckohandling")))
                 .andExpect(status().isOk())
                 .andReturn();
 
@@ -615,9 +592,7 @@ class ShoppingListApiIntegrationTest extends PostgresIntegrationTest {
         MvcResult createListResult = mockMvc.perform(post("/api/lists")
                         .header(ActorDisplayName.HEADER_NAME, "anna")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"name":"Veckohandling"}
-                                """))
+                        .content(createListRequestBody("Veckohandling")))
                 .andExpect(status().isOk())
                 .andReturn();
 
@@ -706,9 +681,7 @@ class ShoppingListApiIntegrationTest extends PostgresIntegrationTest {
         MvcResult createListResult = mockMvc.perform(post("/api/lists")
                         .header(ActorDisplayName.HEADER_NAME, "anna")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"name":"Veckohandling"}
-                                """))
+                        .content(createListRequestBody("Veckohandling")))
                 .andExpect(status().isOk())
                 .andReturn();
 
@@ -760,47 +733,53 @@ class ShoppingListApiIntegrationTest extends PostgresIntegrationTest {
         MvcResult createListResult = mockMvc.perform(post("/api/lists")
                         .header(ActorDisplayName.HEADER_NAME, "anna")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"name":"Veckohandling"}
-                                """))
+                        .content(createListRequestBody("Veckohandling")))
                 .andExpect(status().isOk())
                 .andReturn();
 
         UUID listId = UUID.fromString(readId(createListResult));
         Instant baseInstant = Instant.parse("2026-03-01T00:00:00Z");
 
-        for (int index = 0; index < 3_002; index++) {
-            jdbcTemplate.update(
-                    """
-                            insert into item_activity_log (id, list_id, item_id, event_type, actor_display_name, payload_json, occurred_at)
-                            values (?, ?, ?, ?, ?, ?, ?)
-                            """,
-                    UUID.randomUUID(),
-                    listId,
-                    null,
-                    "shopping-list-item.checked",
-                    "actor-" + index,
-                    "{}",
-                    Timestamp.from(baseInstant.plusSeconds(index))
-            );
+        java.util.List<Integer> indexes = IntStream.range(0, 3_002).boxed().toList();
 
-            jdbcTemplate.update(
-                    """
-                            insert into app_error_log (id, level, source, code, message, path, http_method, actor_display_name, details_json, occurred_at)
-                            values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                            """,
-                    UUID.randomUUID(),
-                    "WARN",
-                    "BACKEND_API",
-                    "code-" + index,
-                    "error-" + index,
-                    "/api/test",
-                    "GET",
-                    "anna",
-                    "{}",
-                    Timestamp.from(baseInstant.plusSeconds(index))
-            );
-        }
+        jdbcTemplate.batchUpdate(
+                """
+                        insert into item_activity_log (id, list_id, item_id, event_type, actor_display_name, payload_json, occurred_at)
+                        values (?, ?, ?, ?, ?, ?, ?)
+                        """,
+                indexes,
+                500,
+                (preparedStatement, index) -> {
+                    preparedStatement.setObject(1, UUID.randomUUID());
+                    preparedStatement.setObject(2, listId);
+                    preparedStatement.setObject(3, null);
+                    preparedStatement.setString(4, "shopping-list-item.checked");
+                    preparedStatement.setString(5, "actor-" + index);
+                    preparedStatement.setString(6, "{}");
+                    preparedStatement.setTimestamp(7, Timestamp.from(baseInstant.plusSeconds(index)));
+                }
+        );
+
+        jdbcTemplate.batchUpdate(
+                """
+                        insert into app_error_log (id, level, source, code, message, path, http_method, actor_display_name, details_json, occurred_at)
+                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                indexes,
+                500,
+                (preparedStatement, index) -> {
+                    preparedStatement.setObject(1, UUID.randomUUID());
+                    preparedStatement.setString(2, "WARN");
+                    preparedStatement.setString(3, "BACKEND_API");
+                    preparedStatement.setString(4, "code-" + index);
+                    preparedStatement.setString(5, "error-" + index);
+                    preparedStatement.setString(6, "/api/test");
+                    preparedStatement.setString(7, "GET");
+                    preparedStatement.setString(8, "anna");
+                    preparedStatement.setString(9, "{}");
+                    preparedStatement.setTimestamp(10, Timestamp.from(baseInstant.plusSeconds(index)));
+                }
+        );
 
         appLogRetentionService.pruneExcessRows();
 
@@ -946,9 +925,7 @@ class ShoppingListApiIntegrationTest extends PostgresIntegrationTest {
         MvcResult createListResult = mockMvc.perform(post("/api/lists")
                         .header(ActorDisplayName.HEADER_NAME, "anna")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"name":"Helghandling"}
-                                """))
+                        .content(createListRequestBody("Helghandling")))
                 .andExpect(status().isOk())
                 .andReturn();
 
@@ -969,9 +946,7 @@ class ShoppingListApiIntegrationTest extends PostgresIntegrationTest {
         MvcResult createListResult = mockMvc.perform(post("/api/lists")
                         .header(ActorDisplayName.HEADER_NAME, "anna")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"name":"Veckohandling"}
-                                """))
+                        .content(createListRequestBody("Veckohandling")))
                 .andExpect(status().isOk())
                 .andReturn();
 
@@ -1024,6 +999,15 @@ class ShoppingListApiIntegrationTest extends PostgresIntegrationTest {
     private int countRows(String sql) {
         Integer count = jdbcTemplate.queryForObject(sql, Integer.class);
         return count == null ? 0 : count;
+    }
+
+    private String createListRequestBody(String name) {
+        return """
+                {
+                  "name":"%s",
+                  "provider":"willys"
+                }
+                """.formatted(name);
     }
 
     private void importWillysList(String name, LocalDate modifiedTime, double priceValue, String productCode) throws Exception {

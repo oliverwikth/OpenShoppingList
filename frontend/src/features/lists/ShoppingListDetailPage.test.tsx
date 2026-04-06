@@ -1047,7 +1047,7 @@ describe('ShoppingListDetailPage', () => {
     expect(await screen.findByText('Kaffe 1')).toBeInTheDocument()
     expect(await screen.findByText('Kaffe 2')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '←' })).toHaveAttribute('href', '/anna/lists/list-1/varor/search?q=kaffe')
-    expect(fetchMock).toHaveBeenCalledWith('/api/retailer-search?q=kaffe&page=1', expect.any(Object))
+    expect(fetchMock).toHaveBeenCalledWith('/api/retailer-search?q=kaffe&page=1&listId=list-1', expect.any(Object))
   })
 
   it('claims an unchecked checklist item when swiped left', async () => {

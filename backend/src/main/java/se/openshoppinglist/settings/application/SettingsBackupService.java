@@ -8,6 +8,7 @@ import se.openshoppinglist.common.pricing.PricingMetadataService;
 import se.openshoppinglist.lists.domain.ExternalArticleSnapshot;
 import se.openshoppinglist.lists.domain.ShoppingList;
 import se.openshoppinglist.lists.domain.ShoppingListItem;
+import se.openshoppinglist.lists.domain.ShoppingListProvider;
 import se.openshoppinglist.lists.domain.ShoppingListRepository;
 
 @Service
@@ -56,6 +57,7 @@ public class SettingsBackupService {
             ShoppingList restoredList = ShoppingList.restore(
                     listView.id(),
                     listView.name(),
+                    listView.provider() == null ? ShoppingListProvider.WILLYS : ShoppingListProvider.fromId(listView.provider()),
                     listView.status(),
                     listView.createdAt(),
                     listView.updatedAt(),
@@ -78,6 +80,7 @@ public class SettingsBackupService {
         return new SettingsBackupViews.BackupListView(
                 shoppingList.getId(),
                 shoppingList.getName(),
+                shoppingList.getProvider().id(),
                 shoppingList.getStatus(),
                 shoppingList.getCreatedAt(),
                 shoppingList.getUpdatedAt(),

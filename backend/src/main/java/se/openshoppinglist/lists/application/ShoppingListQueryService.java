@@ -77,6 +77,7 @@ public class ShoppingListQueryService {
         return new ShoppingListDetailView(
                 shoppingList.getId(),
                 shoppingList.getName(),
+                shoppingList.getProvider().id(),
                 shoppingList.getStatus(),
                 shoppingList.getCreatedAt(),
                 shoppingList.getUpdatedAt(),
@@ -101,6 +102,7 @@ public class ShoppingListQueryService {
         return new ShoppingListOverviewView(
                 shoppingList.getId(),
                 shoppingList.getName(),
+                shoppingList.getProvider().id(),
                 shoppingList.getStatus(),
                 itemCount,
                 checkedCount,

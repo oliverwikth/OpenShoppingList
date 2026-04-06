@@ -70,6 +70,7 @@ public class ShoppingListController {
     ) {
         return shoppingListQueryService.toOverviewView(shoppingListCommandService.createList(
                 request.name(),
+                request.provider(),
                 actorContextResolver.resolve(httpServletRequest)
         ));
     }
@@ -290,7 +291,7 @@ public class ShoppingListController {
         );
     }
 
-    public record CreateListRequest(@NotBlank String name) {
+    public record CreateListRequest(@NotBlank String name, @NotBlank String provider) {
     }
 
     public record RenameListRequest(@NotBlank String name) {

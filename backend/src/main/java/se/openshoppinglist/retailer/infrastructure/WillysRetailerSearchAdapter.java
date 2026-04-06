@@ -39,6 +39,11 @@ class WillysRetailerSearchAdapter implements RetailerSearchPort {
     }
 
     @Override
+    public String provider() {
+        return "willys";
+    }
+
+    @Override
     public RetailerSearchResponse search(String query, int page) {
         try {
             WillysSearchResponse response = restClient.get()

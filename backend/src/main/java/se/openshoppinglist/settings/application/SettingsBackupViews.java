@@ -23,6 +23,7 @@ public final class SettingsBackupViews {
     public record BackupListView(
             UUID id,
             String name,
+            String provider,
             ShoppingListStatus status,
             Instant createdAt,
             Instant updatedAt,

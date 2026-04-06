@@ -1,5 +1,6 @@
 package se.openshoppinglist.retailer.api;
 
+import java.util.UUID;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -19,9 +20,10 @@ public class RetailerSearchController {
 
     @GetMapping
     RetailerSearchResponse search(
+            @RequestParam("listId") UUID listId,
             @RequestParam("q") String query,
             @RequestParam(value = "page", defaultValue = "0") int page
     ) {
-        return retailerSearchService.search(query, page);
+        return retailerSearchService.search(listId, query, page);
     }
 }

@@ -13,6 +13,7 @@ import se.openshoppinglist.common.pricing.PricingMetadataService;
 import se.openshoppinglist.lists.domain.ExternalArticleSnapshot;
 import se.openshoppinglist.lists.domain.ShoppingList;
 import se.openshoppinglist.lists.domain.ShoppingListItem;
+import se.openshoppinglist.lists.domain.ShoppingListProvider;
 import se.openshoppinglist.lists.domain.ShoppingListRepository;
 
 @Service
@@ -40,7 +41,12 @@ public class WillysListImportService {
     @Transactional
     public ShoppingList importList(ImportWillysListCommand command, ActorDisplayName actorDisplayName) {
         Clock importClock = resolveImportClock(command.modifiedTime());
-        ShoppingList shoppingList = ShoppingList.create(resolveListName(command.name()), actorDisplayName, importClock);
+        ShoppingList shoppingList = ShoppingList.create(
+                resolveListName(command.name()),
+                ShoppingListProvider.WILLYS,
+                actorDisplayName,
+                importClock
+        );
 
         for (ImportWillysListEntryCommand entry : command.entries()) {
             importEntry(shoppingList, entry, actorDisplayName, importClock);

@@ -16,6 +16,7 @@ public final class ShoppingListViews {
     public record ShoppingListOverviewView(
             UUID id,
             String name,
+            String provider,
             ShoppingListStatus status,
             int itemCount,
             int checkedItemCount,
@@ -39,6 +40,7 @@ public final class ShoppingListViews {
     public record ShoppingListDetailView(
             UUID id,
             String name,
+            String provider,
             ShoppingListStatus status,
             Instant createdAt,
             Instant updatedAt,

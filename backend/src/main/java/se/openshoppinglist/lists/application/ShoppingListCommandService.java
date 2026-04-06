@@ -11,6 +11,7 @@ import se.openshoppinglist.common.events.DomainEventPublisher;
 import se.openshoppinglist.lists.domain.ExternalArticleSnapshot;
 import se.openshoppinglist.lists.domain.ShoppingList;
 import se.openshoppinglist.lists.domain.ShoppingListItem;
+import se.openshoppinglist.lists.domain.ShoppingListProvider;
 import se.openshoppinglist.lists.domain.ShoppingListRepository;
 import se.openshoppinglist.retailer.application.RetailerArticleDetailsService;
 
@@ -38,8 +39,8 @@ public class ShoppingListCommandService {
     }
 
     @Transactional
-    public ShoppingList createList(String name, ActorDisplayName actorDisplayName) {
-        ShoppingList shoppingList = ShoppingList.create(name, actorDisplayName, clock);
+    public ShoppingList createList(String name, String provider, ActorDisplayName actorDisplayName) {
+        ShoppingList shoppingList = ShoppingList.create(name, ShoppingListProvider.fromId(provider), actorDisplayName, clock);
         return persistAndPublish(shoppingList);
     }
 
@@ -78,6 +79,9 @@ public class ShoppingListCommandService {
     @Transactional
     public ShoppingListItem addExternalItem(UUID listId, ExternalArticleSnapshot snapshot, int quantity, ActorDisplayName actorDisplayName) {
         ShoppingList shoppingList = requireList(listId);
+        if (!shoppingList.getProvider().id().equals(snapshot.provider())) {
+            throw new IllegalArgumentException("External article provider does not match the shopping list provider.");
+        }
         ExternalArticleSnapshot enrichedSnapshot = retailerArticleDetailsService.enrichSnapshot(snapshot);
         ShoppingListItem item = shoppingList.addExternalItem(enrichedSnapshot, quantity, actorDisplayName, clock);
         persistAndPublish(shoppingList);

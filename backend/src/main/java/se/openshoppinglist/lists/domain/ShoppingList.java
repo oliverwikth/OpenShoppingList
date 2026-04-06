@@ -31,6 +31,10 @@ public class ShoppingList extends AggregateRoot {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
+    private ShoppingListProvider provider;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
     private ShoppingListStatus status;
 
     @Column(name = "created_at", nullable = false)
@@ -55,6 +59,7 @@ public class ShoppingList extends AggregateRoot {
     public static ShoppingList restore(
             UUID id,
             String name,
+            ShoppingListProvider provider,
             ShoppingListStatus status,
             Instant createdAt,
             Instant updatedAt,
@@ -64,6 +69,7 @@ public class ShoppingList extends AggregateRoot {
         ShoppingList list = new ShoppingList();
         list.id = id == null ? UUID.randomUUID() : id;
         list.name = normalizeName(name);
+        list.provider = provider == null ? ShoppingListProvider.WILLYS : provider;
         list.status = status == null ? ShoppingListStatus.ACTIVE : status;
         list.createdAt = createdAt == null ? Instant.now() : createdAt;
         list.updatedAt = updatedAt == null ? list.createdAt : updatedAt;
@@ -74,11 +80,12 @@ public class ShoppingList extends AggregateRoot {
         return list;
     }
 
-    public static ShoppingList create(String name, ActorDisplayName actorDisplayName, Clock clock) {
+    public static ShoppingList create(String name, ShoppingListProvider provider, ActorDisplayName actorDisplayName, Clock clock) {
         Instant now = clock.instant();
         ShoppingList list = new ShoppingList();
         list.id = UUID.randomUUID();
         list.name = normalizeName(name);
+        list.provider = requireProvider(provider);
         list.status = ShoppingListStatus.ACTIVE;
         list.createdAt = now;
         list.updatedAt = now;
@@ -247,6 +254,10 @@ public class ShoppingList extends AggregateRoot {
         return status;
     }
 
+    public ShoppingListProvider getProvider() {
+        return provider;
+    }
+
     public Instant getCreatedAt() {
         return createdAt;
     }
@@ -307,5 +318,12 @@ public class ShoppingList extends AggregateRoot {
             throw new IllegalArgumentException("List name must be at most 120 characters.");
         }
         return normalized;
+    }
+
+    private static ShoppingListProvider requireProvider(ShoppingListProvider provider) {
+        if (provider == null) {
+            throw new IllegalArgumentException("List provider must not be null.");
+        }
+        return provider;
     }
 }

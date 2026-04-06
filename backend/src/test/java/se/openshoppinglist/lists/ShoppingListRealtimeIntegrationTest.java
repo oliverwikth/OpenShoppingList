@@ -40,7 +40,10 @@ class ShoppingListRealtimeIntegrationTest extends PostgresIntegrationTest {
 
     @Test
     void broadcastsListEventsOverWebSocketForActiveListClients() throws Exception {
-        JsonNode list = postJson("/api/lists", "anna", Map.of("name", "Realtime-lista"));
+        JsonNode list = postJson("/api/lists", "anna", Map.of(
+                "name", "Realtime-lista",
+                "provider", "willys"
+        ));
         String listId = list.path("id").asText();
 
         BlockingQueue<String> messages = new LinkedBlockingQueue<>();

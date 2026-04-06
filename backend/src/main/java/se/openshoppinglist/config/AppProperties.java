@@ -13,13 +13,25 @@ public record AppProperties(
     public record CorsProperties(List<String> allowedOriginPatterns) {
     }
 
-    public record RetailerProperties(WillysProperties willys) {
+    public record RetailerProperties(WillysProperties willys, LidlProperties lidl) {
     }
 
     public record WillysProperties(
             String baseUrl,
             String searchPath,
             String productPath,
+            Duration connectTimeout,
+            Duration readTimeout,
+            int maxResults
+    ) {
+    }
+
+    public record LidlProperties(
+            String baseUrl,
+            String searchPath,
+            String locale,
+            String assortment,
+            String version,
             Duration connectTimeout,
             Duration readTimeout,
             int maxResults

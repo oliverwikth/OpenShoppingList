@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import se.openshoppinglist.actor.ActorDisplayName;
 import se.openshoppinglist.lists.domain.ShoppingList;
 import se.openshoppinglist.lists.domain.ShoppingListItem;
+import se.openshoppinglist.lists.domain.ShoppingListProvider;
 
 class ShoppingListDomainTest {
 
@@ -16,7 +17,7 @@ class ShoppingListDomainTest {
 
     @Test
     void addsManualItemsAndTracksCheckState() {
-        ShoppingList shoppingList = ShoppingList.create("Veckohandling", new ActorDisplayName("anna"), FIXED_CLOCK);
+        ShoppingList shoppingList = ShoppingList.create("Veckohandling", ShoppingListProvider.WILLYS, new ActorDisplayName("anna"), FIXED_CLOCK);
 
         ShoppingListItem item = shoppingList.addManualItem("Mjölk", "Laktosfri", new ActorDisplayName("anna"), FIXED_CLOCK);
 
@@ -46,7 +47,7 @@ class ShoppingListDomainTest {
 
     @Test
     void mergesRepeatedAddsIntoQuantityAndRemovesItemAtZero() {
-        ShoppingList shoppingList = ShoppingList.create("Veckohandling", new ActorDisplayName("anna"), FIXED_CLOCK);
+        ShoppingList shoppingList = ShoppingList.create("Veckohandling", ShoppingListProvider.WILLYS, new ActorDisplayName("anna"), FIXED_CLOCK);
 
         ShoppingListItem item = shoppingList.addManualItem("Bananer", "", new ActorDisplayName("anna"), FIXED_CLOCK);
         ShoppingListItem sameItem = shoppingList.addManualItem("Bananer", "", new ActorDisplayName("anna"), FIXED_CLOCK);
@@ -73,7 +74,7 @@ class ShoppingListDomainTest {
 
     @Test
     void addsBatchedQuantityInSingleOperation() {
-        ShoppingList shoppingList = ShoppingList.create("Veckohandling", new ActorDisplayName("anna"), FIXED_CLOCK);
+        ShoppingList shoppingList = ShoppingList.create("Veckohandling", ShoppingListProvider.WILLYS, new ActorDisplayName("anna"), FIXED_CLOCK);
 
         ShoppingListItem item = shoppingList.addManualItem("Apelsiner", "", 5, new ActorDisplayName("anna"), FIXED_CLOCK);
 
@@ -89,7 +90,7 @@ class ShoppingListDomainTest {
 
     @Test
     void adjustsItemQuantityByDelta() {
-        ShoppingList shoppingList = ShoppingList.create("Veckohandling", new ActorDisplayName("anna"), FIXED_CLOCK);
+        ShoppingList shoppingList = ShoppingList.create("Veckohandling", ShoppingListProvider.WILLYS, new ActorDisplayName("anna"), FIXED_CLOCK);
 
         ShoppingListItem item = shoppingList.addManualItem("Tacosås", "", 2, new ActorDisplayName("anna"), FIXED_CLOCK);
 

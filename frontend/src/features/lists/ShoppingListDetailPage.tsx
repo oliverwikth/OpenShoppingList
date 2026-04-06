@@ -403,7 +403,7 @@ export function ShoppingListDetailPage() {
 
         for (let page = 0; page <= currentSearchPage; page += 1) {
           if (!nextState.pages[page]) {
-            nextState.pages[page] = await searchRetailer(deferredSearchInput.trim(), page, controller.signal)
+            nextState.pages[page] = await searchRetailer(listId, deferredSearchInput.trim(), page, controller.signal)
           }
         }
 
