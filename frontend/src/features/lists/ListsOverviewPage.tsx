@@ -18,9 +18,16 @@ const PAGE_SIZE_OPTIONS: Array<{ value: ListPageSize; label: string }> = [
   { value: 'all', label: 'Alla' },
 ]
 
-const LIST_PROVIDER_OPTIONS: Array<{ value: ShoppingListProvider; label: string }> = [
-  { value: 'willys', label: 'Willys' },
-  { value: 'lidl', label: 'Lidl' },
+const LIST_PROVIDER_OPTIONS: Array<{
+  value: ShoppingListProvider | 'ica' | 'coop'
+  label: string
+  logoSrc: string
+  enabled: boolean
+}> = [
+  { value: 'willys', label: 'Willys', logoSrc: '/willys-logo.svg', enabled: true },
+  { value: 'lidl', label: 'Lidl', logoSrc: '/lidl-logo.svg', enabled: true },
+  { value: 'ica', label: 'ICA', logoSrc: '/ica-logo.svg', enabled: false },
+  { value: 'coop', label: 'Coop', logoSrc: '/coop-logo.svg', enabled: false },
 ]
 
 function getDefaultListTitle() {
@@ -309,24 +316,34 @@ export function ListsOverviewPage() {
               value={newListName}
               onChange={(event) => setNewListName(event.target.value)}
             />
-            <label className="lists-page-size">
-              <span>Butik</span>
-              <span className="lists-page-size__field">
-                <select
-                  aria-label="Butik"
-                  className="lists-page-size__select"
-                  onChange={(event) => setNewListProvider(event.target.value as ShoppingListProvider)}
-                  value={newListProvider}
-                >
-                  {LIST_PROVIDER_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-                <span aria-hidden="true" className="lists-page-size__chevron" />
-              </span>
-            </label>
+            <div className="provider-picker">
+              <span className="provider-picker__label">Butik</span>
+              <div aria-label="Butik" className="provider-picker__options" role="radiogroup">
+                {LIST_PROVIDER_OPTIONS.map((option) => {
+                  const isSelected = option.value === newListProvider
+                  return (
+                    <button
+                      aria-checked={isSelected}
+                      aria-disabled={!option.enabled}
+                      aria-label={option.label}
+                      className={`provider-option ${isSelected ? 'is-selected' : ''} ${option.enabled ? '' : 'is-disabled'}`}
+                      disabled={!option.enabled}
+                      key={option.value}
+                      onClick={() => {
+                        if (option.enabled) {
+                          setNewListProvider(option.value)
+                        }
+                      }}
+                      role="radio"
+                      title={option.enabled ? option.label : `${option.label} kommer snart`}
+                      type="button"
+                    >
+                      <img alt="" className="provider-option__logo" src={option.logoSrc} />
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
             <button className="primary-pill" disabled={isSaving || !newListName.trim()} type="submit">
               {isSaving ? 'Skapar...' : 'Skapa lista'}
             </button>
