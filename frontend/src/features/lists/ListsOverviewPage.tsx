@@ -27,6 +27,10 @@ const LIST_PROVIDER_OPTIONS: Array<ProviderPickerOption> = [
   { value: 'coop', label: 'Coop', logoSrc: '/coop-logo.png' },
 ]
 
+function providerLogo(optionProvider: ShoppingListProvider) {
+  return LIST_PROVIDER_OPTIONS.find((option) => option.value === optionProvider) ?? LIST_PROVIDER_OPTIONS[0]
+}
+
 function getDefaultListTitle() {
   return new Intl.DateTimeFormat('sv-SE', {
     timeZone: 'Europe/Stockholm',
@@ -495,9 +499,11 @@ function SwipeableListCard({ actorName, disabled, list, onRequestArchive }: Swip
           <span className="summary-pill">
             {list.checkedItemCount}/{list.itemCount}
           </span>
-          <span className={`status-pill ${list.status === 'ACTIVE' ? 'is-live' : ''}`}>
-            {list.status === 'ACTIVE' ? 'Aktiv' : 'Arkiverad'}
-          </span>
+          <img
+            alt={providerLogo(list.provider).label}
+            className="household-list-card__provider-logo"
+            src={providerLogo(list.provider).logoSrc}
+          />
         </div>
       </Link>
     </div>

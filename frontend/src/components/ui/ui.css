@@ -1071,6 +1071,13 @@
   gap: 8px;
 }
 
+.household-list-card__provider-logo {
+  width: 64px;
+  height: 34px;
+  object-fit: contain;
+  object-position: center;
+}
+
 .list-swipe-card {
   position: relative;
   overflow: hidden;
