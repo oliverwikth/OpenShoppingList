@@ -57,11 +57,12 @@ public record AppProperties(
     }
 
     public record IcaProperties(
-            String baseUrl,
-            String searchPath,
-            String storeId,
-            String tag,
-            int maxProductsToDecorate,
+            String siteBaseUrl,
+            String userInformationPath,
+            String searchBaseUrl,
+            String quicksearchPath,
+            String accountNumber,
+            String searchDomain,
             int maxResults,
             Duration connectTimeout,
             Duration readTimeout

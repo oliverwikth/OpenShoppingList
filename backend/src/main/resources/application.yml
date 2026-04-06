@@ -71,11 +71,12 @@ app:
       read-timeout: 6s
       max-results: 12
     ica:
-      base-url: https://handlaprivatkund.ica.se
-      search-path: /stores/{storeId}/api/webproductpagews/v6/product-pages/search
-      store-id: 1004293
-      tag: web
-      max-products-to-decorate: 50
+      site-base-url: https://www.ica.se
+      user-information-path: /api/user/information
+      search-base-url: https://apimgw-pub.ica.se/sverige/digx
+      quicksearch-path: /globalsearch/v1/search/quicksearch
+      account-number: "0"
+      search-domain: All
       max-results: 12
       connect-timeout: 3s
       read-timeout: 6s

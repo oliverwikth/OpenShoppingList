@@ -1,15 +1,19 @@
 package se.openshoppinglist.retailer.infrastructure;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.Iterator;
+import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import se.openshoppinglist.common.pricing.PricingDetails;
 import se.openshoppinglist.common.pricing.PricingMetadataService;
 import se.openshoppinglist.config.AppProperties;
 import se.openshoppinglist.retailer.application.RetailerSearchPort;
@@ -21,17 +25,25 @@ class IcaRetailerSearchAdapter implements RetailerSearchPort {
 
     private static final String PROVIDER = "ica";
     private static final String RETAILER_NAME = "ICA";
+    private static final Pattern UNIT_PATTERN = Pattern.compile("(?i)\\b\\d+(?:[.,]\\d+)?\\s*(kg|g|mg|l|dl|cl|ml|st)\\b");
+    private static final String SESSION_ID_CHARS = "abcdefghijklmnopqrstuvwxyz0123456789";
 
-    private final RestClient restClient;
+    private final RestClient siteRestClient;
+    private final RestClient searchRestClient;
     private final AppProperties.IcaProperties properties;
     private final PricingMetadataService pricingMetadataService;
+    private final Object authorizationLock = new Object();
+
+    private volatile IcaUserInformation cachedUserInformation;
 
     IcaRetailerSearchAdapter(
-            @Qualifier("icaRestClient") RestClient restClient,
+            @Qualifier("icaSiteRestClient") RestClient siteRestClient,
+            @Qualifier("icaSearchRestClient") RestClient searchRestClient,
             AppProperties appProperties,
             PricingMetadataService pricingMetadataService
     ) {
-        this.restClient = restClient;
+        this.siteRestClient = siteRestClient;
+        this.searchRestClient = searchRestClient;
         this.properties = appProperties.retailer().ica();
         this.pricingMetadataService = pricingMetadataService;
     }
@@ -44,35 +56,35 @@ class IcaRetailerSearchAdapter implements RetailerSearchPort {
     @Override
     public RetailerSearchResponse search(String query, int page) {
         int pageSize = properties.maxResults();
-        int requestedSize = Math.min(properties.maxProductsToDecorate(), (page + 1) * pageSize);
+        int offset = Math.max(0, page) * pageSize;
         try {
-            JsonNode response = restClient.get()
-                    .uri(builder -> builder.path(properties.searchPath())
-                            .queryParam("q", query)
-                            .queryParam("tag", properties.tag())
-                            .queryParam("includeAdditionalPageInfo", true)
-                            .queryParam("maxProductsToDecorate", properties.maxProductsToDecorate())
-                            .queryParam("maxPageSize", requestedSize)
-                            .build(properties.storeId()))
+            IcaUserInformation userInformation = userInformation();
+            IcaQuicksearchResponse response = searchRestClient.post()
+                    .uri(builder -> builder.path(properties.quicksearchPath()).build())
+                    .contentType(MediaType.APPLICATION_JSON)
                     .accept(MediaType.APPLICATION_JSON)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + userInformation.accessToken())
+                    .body(new IcaQuicksearchRequest(
+                            query,
+                            pageSize,
+                            offset,
+                            properties.accountNumber(),
+                            properties.searchDomain(),
+                            sessionId()
+                    ))
                     .retrieve()
-                    .body(JsonNode.class);
+                    .body(IcaQuicksearchResponse.class);
 
-            List<JsonNode> products = findArray(response, "products", "productCards", "items", "results");
-            int startIndex = Math.min(page * pageSize, products.size());
-            int endIndex = Math.min(startIndex + pageSize, products.size());
-            List<RetailerArticleSearchResult> results = new ArrayList<>();
-            for (int index = startIndex; index < endIndex; index += 1) {
-                results.add(toSearchResult(products.get(index)));
-            }
-
-            int totalResults = intValue(response, products.size(), "totalNumberOfProducts", "totalHits", "total", "count");
-            if (totalResults <= 0 && !products.isEmpty()) {
-                totalResults = products.size();
-            }
-            boolean hasMoreResults = booleanValue(response, endIndex < totalResults, "hasNextPage")
-                    || textValue(response, "nextPageToken", "pageToken") != null;
+            List<RetailerArticleSearchResult> results = response == null || response.products() == null || response.products().documents() == null
+                    ? List.of()
+                    : response.products().documents().stream()
+                    .map(this::toSearchResult)
+                    .toList();
+            int totalResults = response == null || response.products() == null || response.products().stats() == null
+                    ? results.size()
+                    : response.products().stats().totalHits();
             int totalPages = totalResults <= 0 ? 0 : (int) Math.ceil(totalResults / (double) pageSize);
+            boolean hasMoreResults = page + 1 < totalPages;
 
             return new RetailerSearchResponse(PROVIDER, query, page, totalPages, totalResults, hasMoreResults, true, null, results);
         } catch (RestClientException exception) {
@@ -90,172 +102,97 @@ class IcaRetailerSearchAdapter implements RetailerSearchPort {
         }
     }
 
-    private RetailerArticleSearchResult toSearchResult(JsonNode product) {
-        String title = textValue(product, "description", "name", "title");
-        String subtitle = firstNonBlank(
-                textValue(product, "subTitle", "subtitle"),
-                textValue(atPath(product, "salesUnit"), "text", "label", "value")
-        );
-        BigDecimal priceAmount = decimalValue(
-                atPath(product, "prices", "discountedPrice", "amount"),
-                atPath(product, "prices", "basePrice", "amount"),
-                atPath(product, "price", "amount"),
-                atPath(product, "price")
-        );
-        String comparisonText = firstNonBlank(
-                textValue(atPath(product, "prices", "comparisonPrice", "displayAmount")),
-                firstNonBlank(
-                        textValue(atPath(product, "comparisonPrice", "displayAmount")),
-                        textValue(atPath(product, "comparisonPrice"))
-                )
-        );
-        String imageUrl = firstNonBlank(
-                textValue(atPath(product, "primaryImage"), "url"),
-                firstNonBlank(
-                        textValue(atPath(product, "image"), "url"),
-                        textValue(atPath(product, "images", 0), "url")
-                )
-        );
-        String category = firstNonBlank(
-                textValue(atPath(product, "category"), "name"),
-                firstNonBlank(
-                        textValue(atPath(product, "topCategory"), "name"),
-                        textValue(product, "categoryName")
-                )
-        );
+    private RetailerArticleSearchResult toSearchResult(IcaProduct product) {
+        String title = firstNonBlank(product.title(), product.displayName());
+        BigDecimal priceAmount = decimalValue(product.price());
+        String category = firstNonBlank(product.mainCategoryName(), product.categoryName());
+        String unit = unitFromTitle(title);
 
         return new RetailerArticleSearchResult(
                 PROVIDER,
-                firstNonBlank(textValue(product, "retailerProductId", "productId", "id"), title),
+                firstNonBlank(product.consumerItemId(), firstNonBlank(product.gtin(), title)),
                 title,
-                subtitle,
-                imageUrl,
+                null,
+                product.image(),
                 category,
                 priceAmount,
                 priceAmount == null ? null : "SEK",
-                pricingMetadataService.fromWillysProduct(
+                pricingMetadataService.fromRequest(
                         title,
-                        subtitle,
-                        priceAmount == null ? null : priceAmount.toPlainString(),
-                        textValue(atPath(product, "salesUnit"), "text", "label", "value"),
-                        comparisonText,
-                        null
+                        null,
+                        new PricingDetails(unit, null, null, PricingMetadataService.DEFAULT_QUANTITY_FACTOR)
                 ),
                 0
         );
     }
 
-    private List<JsonNode> findArray(JsonNode root, String... fieldNames) {
-        for (String fieldName : fieldNames) {
-            JsonNode candidate = findFirst(root, fieldName);
-            if (candidate != null && candidate.isArray()) {
-                List<JsonNode> values = new ArrayList<>();
-                candidate.forEach(values::add);
-                return values;
-            }
+    private IcaUserInformation userInformation() {
+        IcaUserInformation cached = cachedUserInformation;
+        if (hasUsableAccessToken(cached)) {
+            return cached;
         }
-        return List.of();
+
+        synchronized (authorizationLock) {
+            cached = cachedUserInformation;
+            if (hasUsableAccessToken(cached)) {
+                return cached;
+            }
+
+            IcaUserInformation refreshed = siteRestClient.get()
+                    .uri(builder -> builder.path(properties.userInformationPath()).build())
+                    .accept(MediaType.APPLICATION_JSON)
+                    .retrieve()
+                    .body(IcaUserInformation.class);
+            if (refreshed == null || refreshed.accessToken() == null || refreshed.accessToken().isBlank()) {
+                throw new RestClientException("ICA user information did not include an access token.");
+            }
+            cachedUserInformation = refreshed;
+            return refreshed;
+        }
     }
 
-    private JsonNode findFirst(JsonNode node, String fieldName) {
-        if (node == null || node.isMissingNode() || node.isNull()) {
+    private boolean hasUsableAccessToken(IcaUserInformation userInformation) {
+        if (userInformation == null || userInformation.accessToken() == null || userInformation.accessToken().isBlank()) {
+            return false;
+        }
+        try {
+            return OffsetDateTime.parse(userInformation.tokenExpires()).toInstant().isAfter(Instant.now().plusSeconds(1));
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    private String unitFromTitle(String title) {
+        if (title == null || title.isBlank()) {
             return null;
         }
-        if (node.has(fieldName)) {
-            return node.get(fieldName);
-        }
-        if (node.isObject()) {
-            Iterator<JsonNode> children = node.elements();
-            while (children.hasNext()) {
-                JsonNode match = findFirst(children.next(), fieldName);
-                if (match != null) {
-                    return match;
-                }
-            }
-        }
-        if (node.isArray()) {
-            for (JsonNode child : node) {
-                JsonNode match = findFirst(child, fieldName);
-                if (match != null) {
-                    return match;
-                }
-            }
-        }
-        return null;
-    }
-
-    private JsonNode atPath(JsonNode node, String... path) {
-        JsonNode current = node;
-        for (String segment : path) {
-            if (current == null || current.isMissingNode() || current.isNull()) {
-                return null;
-            }
-            current = current.path(segment);
-        }
-        return current == null || current.isMissingNode() || current.isNull() ? null : current;
-    }
-
-    private JsonNode atPath(JsonNode node, String segment, int index) {
-        JsonNode array = atPath(node, segment);
-        if (array == null || !array.isArray() || index >= array.size()) {
+        Matcher matcher = UNIT_PATTERN.matcher(title);
+        if (!matcher.find()) {
             return null;
         }
-        return array.get(index);
+        return matcher.group(1).toLowerCase();
     }
 
-    private String textValue(JsonNode node, String... fieldNames) {
-        if (node == null || node.isMissingNode() || node.isNull()) {
+    private BigDecimal decimalValue(String value) {
+        if (value == null || value.isBlank()) {
             return null;
         }
-        if (fieldNames.length == 0) {
-            return node.isTextual() ? node.asText() : null;
+        try {
+            return new BigDecimal(value.replace(',', '.'));
+        } catch (NumberFormatException exception) {
+            return null;
         }
-        for (String fieldName : fieldNames) {
-            JsonNode candidate = node.path(fieldName);
-            if (!candidate.isMissingNode() && !candidate.isNull() && !candidate.asText().isBlank()) {
-                return candidate.asText();
-            }
-        }
-        return null;
     }
 
-    private BigDecimal decimalValue(JsonNode... candidates) {
-        for (JsonNode candidate : candidates) {
-            if (candidate == null || candidate.isMissingNode() || candidate.isNull()) {
-                continue;
-            }
-            if (candidate.isNumber()) {
-                return candidate.decimalValue();
-            }
-            if (candidate.isTextual()) {
-                try {
-                    return new BigDecimal(candidate.asText().replace(',', '.'));
-                } catch (NumberFormatException ignored) {
-                    // Try the next candidate.
-                }
-            }
+    private String sessionId() {
+        StringBuilder builder = new StringBuilder()
+                .append(System.currentTimeMillis())
+                .append('-');
+        ThreadLocalRandom random = ThreadLocalRandom.current();
+        for (int index = 0; index < 7; index += 1) {
+            builder.append(SESSION_ID_CHARS.charAt(random.nextInt(SESSION_ID_CHARS.length())));
         }
-        return null;
-    }
-
-    private int intValue(JsonNode root, int fallback, String... fieldNames) {
-        for (String fieldName : fieldNames) {
-            JsonNode candidate = findFirst(root, fieldName);
-            if (candidate != null && candidate.canConvertToInt()) {
-                return candidate.asInt();
-            }
-        }
-        return fallback;
-    }
-
-    private boolean booleanValue(JsonNode root, boolean fallback, String... fieldNames) {
-        for (String fieldName : fieldNames) {
-            JsonNode candidate = findFirst(root, fieldName);
-            if (candidate != null && candidate.isBoolean()) {
-                return candidate.asBoolean();
-            }
-        }
-        return fallback;
+        return builder.toString();
     }
 
     private String firstNonBlank(String primary, String fallback) {
@@ -263,5 +200,48 @@ class IcaRetailerSearchAdapter implements RetailerSearchPort {
             return primary;
         }
         return fallback;
+    }
+
+    record IcaQuicksearchRequest(
+            String queryString,
+            int take,
+            int offset,
+            String accountNumber,
+            String searchDomain,
+            String sessionId
+    ) {
+    }
+
+    record IcaQuicksearchResponse(IcaProducts products) {
+    }
+
+    record IcaProducts(List<IcaProduct> documents, IcaStats stats) {
+    }
+
+    record IcaStats(int totalHits) {
+    }
+
+    record IcaProduct(
+            String id,
+            String accountNumber,
+            String consumerItemId,
+            String gtin,
+            String displayName,
+            String price,
+            String image,
+            String title,
+            String categoryName,
+            String mainCategoryName,
+            String meanWeight,
+            String countryOfOriginName,
+            String ageLimitid
+    ) {
+    }
+
+    record IcaUserInformation(
+            Integer loginState,
+            String accessToken,
+            String tokenExpires
+    ) {
     }
 }

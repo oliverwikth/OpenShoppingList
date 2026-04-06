@@ -24,10 +24,17 @@ class RestClientConfiguration {
     }
 
     @Bean
-    @Qualifier("icaRestClient")
-    RestClient icaRestClient(AppProperties properties) {
+    @Qualifier("icaSiteRestClient")
+    RestClient icaSiteRestClient(AppProperties properties) {
         AppProperties.IcaProperties ica = properties.retailer().ica();
-        return buildRestClient(ica.baseUrl(), ica.connectTimeout(), ica.readTimeout());
+        return buildRestClient(ica.siteBaseUrl(), ica.connectTimeout(), ica.readTimeout());
+    }
+
+    @Bean
+    @Qualifier("icaSearchRestClient")
+    RestClient icaSearchRestClient(AppProperties properties) {
+        AppProperties.IcaProperties ica = properties.retailer().ica();
+        return buildRestClient(ica.searchBaseUrl(), ica.connectTimeout(), ica.readTimeout());
     }
 
     private RestClient buildRestClient(String baseUrl, java.time.Duration connectTimeout, java.time.Duration readTimeout) {
