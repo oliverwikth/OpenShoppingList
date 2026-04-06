@@ -21,17 +21,4 @@ class RestClientConfiguration {
                 .requestFactory(requestFactory)
                 .build();
     }
-
-    @Bean
-    @Qualifier("lidlRestClient")
-    RestClient lidlRestClient(AppProperties properties) {
-        AppProperties.LidlProperties lidl = properties.retailer().lidl();
-        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-        requestFactory.setConnectTimeout(Math.toIntExact(lidl.connectTimeout().toMillis()));
-        requestFactory.setReadTimeout(Math.toIntExact(lidl.readTimeout().toMillis()));
-        return RestClient.builder()
-                .baseUrl(lidl.baseUrl())
-                .requestFactory(requestFactory)
-                .build();
-    }
 }
