@@ -67,16 +67,15 @@ public class ShoppingList extends AggregateRoot {
             String lastModifiedByDisplayName
     ) {
         ShoppingList list = new ShoppingList();
-        list.id = id == null ? UUID.randomUUID() : id;
+        list.id = requireId(id);
         list.name = normalizeName(name);
-        list.provider = provider == null ? ShoppingListProvider.WILLYS : provider;
-        list.status = status == null ? ShoppingListStatus.ACTIVE : status;
-        list.createdAt = createdAt == null ? Instant.now() : createdAt;
-        list.updatedAt = updatedAt == null ? list.createdAt : updatedAt;
+        list.provider = requireProvider(provider);
+        list.status = requireStatus(status);
+        list.createdAt = requireCreatedAt(createdAt);
+        list.updatedAt = requireUpdatedAt(updatedAt, list.createdAt);
+        validateArchiveState(list.status, archivedAt);
         list.archivedAt = archivedAt;
-        list.lastModifiedByDisplayName = lastModifiedByDisplayName == null || lastModifiedByDisplayName.isBlank()
-                ? "import"
-                : lastModifiedByDisplayName.trim();
+        list.lastModifiedByDisplayName = normalizeRestoredActor(lastModifiedByDisplayName);
         return list;
     }
 
@@ -200,7 +199,7 @@ public class ShoppingList extends AggregateRoot {
         if (shouldRemove) {
             items.remove(item);
             touch(actorDisplayName, clock);
-            recordEvent(new ShoppingDomainEvent("shopping-list-item.removed", id, null, actorDisplayName.value(), updatedAt));
+            recordEvent(new ShoppingDomainEvent("shopping-list-item.removed", id, itemId, actorDisplayName.value(), updatedAt));
             return null;
         }
 
@@ -230,7 +229,7 @@ public class ShoppingList extends AggregateRoot {
             }
             items.remove(item);
             touch(actorDisplayName, clock);
-            recordEvent(new ShoppingDomainEvent("shopping-list-item.removed", id, null, actorDisplayName.value(), updatedAt));
+            recordEvent(new ShoppingDomainEvent("shopping-list-item.removed", id, itemId, actorDisplayName.value(), updatedAt));
             return null;
         }
 
@@ -325,5 +324,56 @@ public class ShoppingList extends AggregateRoot {
             throw new IllegalArgumentException("List provider must not be null.");
         }
         return provider;
+    }
+
+    private static UUID requireId(UUID id) {
+        if (id == null) {
+            throw new IllegalArgumentException("List id must not be null.");
+        }
+        return id;
+    }
+
+    private static ShoppingListStatus requireStatus(ShoppingListStatus status) {
+        if (status == null) {
+            throw new IllegalArgumentException("List status must not be null.");
+        }
+        return status;
+    }
+
+    private static Instant requireCreatedAt(Instant createdAt) {
+        if (createdAt == null) {
+            throw new IllegalArgumentException("List createdAt must not be null.");
+        }
+        return createdAt;
+    }
+
+    private static Instant requireUpdatedAt(Instant updatedAt, Instant createdAt) {
+        if (updatedAt == null) {
+            throw new IllegalArgumentException("List updatedAt must not be null.");
+        }
+        if (updatedAt.isBefore(createdAt)) {
+            throw new IllegalArgumentException("List updatedAt must not be before createdAt.");
+        }
+        return updatedAt;
+    }
+
+    private static void validateArchiveState(ShoppingListStatus status, Instant archivedAt) {
+        if (status == ShoppingListStatus.ARCHIVED && archivedAt == null) {
+            throw new IllegalArgumentException("Archived lists must include archivedAt.");
+        }
+        if (status == ShoppingListStatus.ACTIVE && archivedAt != null) {
+            throw new IllegalArgumentException("Active lists must not include archivedAt.");
+        }
+    }
+
+    private static String normalizeRestoredActor(String rawActorDisplayName) {
+        if (rawActorDisplayName == null || rawActorDisplayName.isBlank()) {
+            throw new IllegalArgumentException("List lastModifiedByDisplayName must not be blank.");
+        }
+        String normalized = rawActorDisplayName.trim();
+        if (normalized.length() > 60) {
+            throw new IllegalArgumentException("List lastModifiedByDisplayName must be at most 60 characters.");
+        }
+        return normalized;
     }
 }

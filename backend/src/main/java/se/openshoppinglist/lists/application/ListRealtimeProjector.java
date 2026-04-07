@@ -1,7 +1,8 @@
 package se.openshoppinglist.lists.application;
 
-import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 import se.openshoppinglist.common.events.DomainEvent;
 
 @Component
@@ -13,7 +14,7 @@ class ListRealtimeProjector {
         this.listRealtimePublisher = listRealtimePublisher;
     }
 
-    @EventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onDomainEvent(DomainEvent event) {
         listRealtimePublisher.publish(new ListRealtimeUpdate(
                 event.eventType(),

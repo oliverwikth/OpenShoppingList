@@ -1,15 +1,19 @@
 package se.openshoppinglist.lists;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import se.openshoppinglist.actor.ActorDisplayName;
+import se.openshoppinglist.common.events.DomainEvent;
 import se.openshoppinglist.lists.domain.ShoppingList;
 import se.openshoppinglist.lists.domain.ShoppingListItem;
 import se.openshoppinglist.lists.domain.ShoppingListProvider;
+import se.openshoppinglist.lists.domain.ShoppingListStatus;
 
 class ShoppingListDomainTest {
 
@@ -61,7 +65,8 @@ class ShoppingListDomainTest {
 
         shoppingList.decreaseItemQuantity(item.getId(), new ActorDisplayName("anna"), FIXED_CLOCK);
         assertThat(shoppingList.getItems()).isEmpty();
-        assertThat(shoppingList.pullDomainEvents())
+        List<DomainEvent> events = shoppingList.pullDomainEvents();
+        assertThat(events)
                 .extracting("eventType")
                 .containsExactly(
                         "shopping-list.created",
@@ -70,6 +75,7 @@ class ShoppingListDomainTest {
                         "shopping-list-item.quantity-decreased",
                         "shopping-list-item.removed"
                 );
+        assertThat(events.getLast().itemId()).isEqualTo(item.getId());
     }
 
     @Test
@@ -105,7 +111,8 @@ class ShoppingListDomainTest {
         ShoppingListItem removedItem = shoppingList.adjustItemQuantity(item.getId(), -1, new ActorDisplayName("olle"), FIXED_CLOCK);
         assertThat(removedItem).isNull();
         assertThat(shoppingList.getItems()).isEmpty();
-        assertThat(shoppingList.pullDomainEvents())
+        List<DomainEvent> events = shoppingList.pullDomainEvents();
+        assertThat(events)
                 .extracting("eventType")
                 .containsExactly(
                         "shopping-list.created",
@@ -114,5 +121,35 @@ class ShoppingListDomainTest {
                         "shopping-list-item.quantity-decreased",
                         "shopping-list-item.removed"
                 );
+        assertThat(events.getLast().itemId()).isEqualTo(item.getId());
+    }
+
+    @Test
+    void restoreFailsFastWhenRequiredStateIsMissing() {
+        assertThatThrownBy(() -> ShoppingList.restore(
+                null,
+                "Veckohandling",
+                ShoppingListProvider.WILLYS,
+                ShoppingListStatus.ACTIVE,
+                FIXED_CLOCK.instant(),
+                FIXED_CLOCK.instant(),
+                null,
+                "anna"
+        ))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("List id must not be null");
+
+        assertThatThrownBy(() -> ShoppingList.restore(
+                java.util.UUID.randomUUID(),
+                "Veckohandling",
+                ShoppingListProvider.WILLYS,
+                ShoppingListStatus.ARCHIVED,
+                FIXED_CLOCK.instant(),
+                FIXED_CLOCK.instant(),
+                null,
+                "anna"
+        ))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Archived lists must include archivedAt");
     }
 }

@@ -54,10 +54,11 @@ public class SettingsBackupService {
 
         int importedItems = 0;
         for (SettingsBackupViews.BackupListView listView : backup.lists()) {
+            validateBackupList(listView);
             ShoppingList restoredList = ShoppingList.restore(
                     listView.id(),
                     listView.name(),
-                    listView.provider() == null ? ShoppingListProvider.WILLYS : ShoppingListProvider.fromId(listView.provider()),
+                    ShoppingListProvider.fromId(listView.provider()),
                     listView.status(),
                     listView.createdAt(),
                     listView.updatedAt(),
@@ -197,6 +198,15 @@ public class SettingsBackupService {
         }
         if (backup.lists() == null) {
             throw new IllegalArgumentException("Backup must include a lists array.");
+        }
+    }
+
+    private void validateBackupList(SettingsBackupViews.BackupListView listView) {
+        if (listView == null) {
+            throw new IllegalArgumentException("Backup lists must not contain null entries.");
+        }
+        if (listView.items() == null) {
+            throw new IllegalArgumentException("Backup list items must not be null.");
         }
     }
 }

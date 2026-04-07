@@ -119,18 +119,20 @@ public class ShoppingListItem {
             String manualNote
     ) {
         ShoppingListItem item = new ShoppingListItem();
-        item.id = id == null ? UUID.randomUUID() : id;
+        item.id = requireId(id);
         item.shoppingList = shoppingList;
         item.itemType = ShoppingListItemType.MANUAL;
         item.title = normalizeTitle(title);
+        validateCheckState(checked, checkedAt, checkedByDisplayName);
         item.checked = checked;
         item.checkedAt = checkedAt;
         item.checkedByDisplayName = checkedByDisplayName;
+        validateClaimState(claimedAt, claimedByDisplayName);
         item.claimedAt = claimedAt;
         item.claimedByDisplayName = claimedByDisplayName;
-        item.lastModifiedByDisplayName = normalizeActor(lastModifiedByDisplayName);
-        item.createdAt = createdAt == null ? Instant.now() : createdAt;
-        item.updatedAt = updatedAt == null ? item.createdAt : updatedAt;
+        item.lastModifiedByDisplayName = normalizeRestoredActor(lastModifiedByDisplayName);
+        item.createdAt = requireCreatedAt(createdAt);
+        item.updatedAt = requireUpdatedAt(updatedAt, item.createdAt);
         item.position = position;
         item.quantity = normalizeQuantity(quantity);
         item.manualNote = manualNote == null || manualNote.isBlank() ? null : manualNote.trim();
@@ -153,19 +155,22 @@ public class ShoppingListItem {
             int position,
             int quantity
     ) {
+        requireSnapshot(snapshot);
         ShoppingListItem item = new ShoppingListItem();
-        item.id = id == null ? UUID.randomUUID() : id;
+        item.id = requireId(id);
         item.shoppingList = shoppingList;
         item.itemType = ShoppingListItemType.EXTERNAL_ARTICLE;
         item.title = normalizeTitle(snapshot.title());
+        validateCheckState(checked, checkedAt, checkedByDisplayName);
         item.checked = checked;
         item.checkedAt = checkedAt;
         item.checkedByDisplayName = checkedByDisplayName;
+        validateClaimState(claimedAt, claimedByDisplayName);
         item.claimedAt = claimedAt;
         item.claimedByDisplayName = claimedByDisplayName;
-        item.lastModifiedByDisplayName = normalizeActor(lastModifiedByDisplayName);
-        item.createdAt = createdAt == null ? Instant.now() : createdAt;
-        item.updatedAt = updatedAt == null ? item.createdAt : updatedAt;
+        item.lastModifiedByDisplayName = normalizeRestoredActor(lastModifiedByDisplayName);
+        item.createdAt = requireCreatedAt(createdAt);
+        item.updatedAt = requireUpdatedAt(updatedAt, item.createdAt);
         item.position = position;
         item.quantity = normalizeQuantity(quantity);
         item.sourceProvider = snapshot.provider();
@@ -178,9 +183,7 @@ public class ShoppingListItem {
         item.sourcePriceAmount = snapshot.priceAmount();
         item.sourceCurrency = snapshot.currency();
         item.sourceSubtitle = snapshot.subtitle();
-        item.sourcePayloadJson = snapshot.rawPayloadJson() == null || snapshot.rawPayloadJson().isBlank()
-                ? "{}"
-                : snapshot.rawPayloadJson();
+        item.sourcePayloadJson = requirePayloadJson(snapshot.rawPayloadJson());
         return item;
     }
 
@@ -519,7 +522,66 @@ public class ShoppingListItem {
         return quantity;
     }
 
-    private static String normalizeActor(String actorDisplayName) {
-        return actorDisplayName == null || actorDisplayName.isBlank() ? "import" : actorDisplayName.trim();
+    private static UUID requireId(UUID id) {
+        if (id == null) {
+            throw new IllegalArgumentException("Item id must not be null.");
+        }
+        return id;
+    }
+
+    private static void requireSnapshot(ExternalArticleSnapshot snapshot) {
+        if (snapshot == null) {
+            throw new IllegalArgumentException("External snapshot must not be null.");
+        }
+    }
+
+    private static Instant requireCreatedAt(Instant createdAt) {
+        if (createdAt == null) {
+            throw new IllegalArgumentException("Item createdAt must not be null.");
+        }
+        return createdAt;
+    }
+
+    private static Instant requireUpdatedAt(Instant updatedAt, Instant createdAt) {
+        if (updatedAt == null) {
+            throw new IllegalArgumentException("Item updatedAt must not be null.");
+        }
+        if (updatedAt.isBefore(createdAt)) {
+            throw new IllegalArgumentException("Item updatedAt must not be before createdAt.");
+        }
+        return updatedAt;
+    }
+
+    private static void validateCheckState(boolean checked, Instant checkedAt, String checkedByDisplayName) {
+        if (checked && (checkedAt == null || checkedByDisplayName == null || checkedByDisplayName.isBlank())) {
+            throw new IllegalArgumentException("Checked items must include checkedAt and checkedByDisplayName.");
+        }
+        if (!checked && (checkedAt != null || (checkedByDisplayName != null && !checkedByDisplayName.isBlank()))) {
+            throw new IllegalArgumentException("Unchecked items must not include checkedAt or checkedByDisplayName.");
+        }
+    }
+
+    private static void validateClaimState(Instant claimedAt, String claimedByDisplayName) {
+        if ((claimedAt == null) != (claimedByDisplayName == null || claimedByDisplayName.isBlank())) {
+            throw new IllegalArgumentException("Claimed state must include both claimedAt and claimedByDisplayName, or neither.");
+        }
+    }
+
+    private static String normalizeRestoredActor(String actorDisplayName) {
+        if (actorDisplayName == null || actorDisplayName.isBlank()) {
+            throw new IllegalArgumentException("Item lastModifiedByDisplayName must not be blank.");
+        }
+        String normalized = actorDisplayName.trim();
+        if (normalized.length() > 60) {
+            throw new IllegalArgumentException("Item lastModifiedByDisplayName must be at most 60 characters.");
+        }
+        return normalized;
+    }
+
+    private static String requirePayloadJson(String rawPayloadJson) {
+        if (rawPayloadJson == null || rawPayloadJson.isBlank()) {
+            throw new IllegalArgumentException("External snapshot payload metadata must not be blank.");
+        }
+        return rawPayloadJson;
     }
 }
