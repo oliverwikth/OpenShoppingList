@@ -11,6 +11,7 @@ import org.springframework.web.client.RestClientException;
 import se.openshoppinglist.common.pricing.PricingMetadataService;
 import se.openshoppinglist.config.AppProperties;
 import se.openshoppinglist.retailer.application.RetailerSearchPort;
+import se.openshoppinglist.retailer.domain.RetailerArticleIdentity;
 import se.openshoppinglist.retailer.domain.RetailerArticleSearchResult;
 import se.openshoppinglist.retailer.domain.RetailerSearchResponse;
 
@@ -95,10 +96,17 @@ class LidlRetailerSearchAdapter implements RetailerSearchPort {
         String title = firstNonBlank(product.title(), "Lidl produkt");
         String subtitle = packageSize(product.subtitles());
         BigDecimal price = product.price();
+        String ean = firstNonBlank(product.ean(), product.gtin());
+        String articleNumber = product.articleNumber();
+        String sku = articleNumber;
+        String canonicalArticleId = RetailerArticleIdentity.canonicalArticleId(ean, articleNumber, sku);
 
         return new RetailerArticleSearchResult(
                 PROVIDER,
                 firstNonBlank(product.id(), title),
+                canonicalArticleId,
+                ean,
+                sku,
                 title,
                 subtitle,
                 product.imageUrl(),
@@ -169,6 +177,9 @@ class LidlRetailerSearchAdapter implements RetailerSearchPort {
 
     record LidlSearchItem(
             String id,
+            String articleNumber,
+            String ean,
+            String gtin,
             String title,
             String brand,
             List<String> subtitles,

@@ -52,14 +52,27 @@ public class RetailerSearchService {
         RetailerSearchPurchaseHistoryService.PurchaseSignals purchaseSignals = purchaseHistoryService.purchaseSignals();
         List<RetailerArticleSearchResult> rankedResults = providerResponse.results().stream()
                 .map(result -> {
-                    int articlePurchaseCount = purchaseSignals.articleCountFor(result.provider(), result.articleId());
+                    int articlePurchaseCount = purchaseSignals.articleCountFor(
+                            result.provider(),
+                            result.articleId(),
+                            result.canonicalArticleId(),
+                            result.ean(),
+                            result.sku()
+                    );
+                    int keywordMatchTokenCount = purchaseSignals.keywordMatchTokenCountFor(result.title());
+                    int keywordPurchaseCount = purchaseSignals.keywordCountFor(result.title());
                     int titlePurchaseCount = purchaseSignals.titleCountFor(result.title());
-                    int purchaseCount = articlePurchaseCount > 0 ? articlePurchaseCount : titlePurchaseCount;
+                    int purchaseCount = articlePurchaseCount > 0
+                            ? articlePurchaseCount
+                            : (keywordPurchaseCount > 0 ? keywordPurchaseCount : titlePurchaseCount);
 
                     return new RankedResult(
                             new RetailerArticleSearchResult(
                                     result.provider(),
                                     result.articleId(),
+                                    result.canonicalArticleId(),
+                                    result.ean(),
+                                    result.sku(),
                                     result.title(),
                                     result.subtitle(),
                                     result.imageUrl(),
@@ -70,11 +83,15 @@ public class RetailerSearchService {
                                     purchaseCount
                             ),
                             articlePurchaseCount,
+                            keywordMatchTokenCount,
+                            keywordPurchaseCount,
                             titlePurchaseCount
                     );
                 })
                 .sorted(Comparator
                         .comparingInt(RankedResult::articlePurchaseCount).reversed()
+                        .thenComparing(Comparator.comparingInt(RankedResult::keywordMatchTokenCount).reversed())
+                        .thenComparing(Comparator.comparingInt(RankedResult::keywordPurchaseCount).reversed())
                         .thenComparing(Comparator.comparingInt(RankedResult::titlePurchaseCount).reversed()))
                 .map(RankedResult::result)
                 .toList();
@@ -95,6 +112,8 @@ public class RetailerSearchService {
     private record RankedResult(
             RetailerArticleSearchResult result,
             int articlePurchaseCount,
+            int keywordMatchTokenCount,
+            int keywordPurchaseCount,
             int titlePurchaseCount
     ) {
     }

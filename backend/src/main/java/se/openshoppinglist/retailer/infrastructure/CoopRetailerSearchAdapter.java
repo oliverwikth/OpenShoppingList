@@ -10,6 +10,7 @@ import org.springframework.web.client.RestClientException;
 import se.openshoppinglist.common.pricing.PricingMetadataService;
 import se.openshoppinglist.config.AppProperties;
 import se.openshoppinglist.retailer.application.RetailerSearchPort;
+import se.openshoppinglist.retailer.domain.RetailerArticleIdentity;
 import se.openshoppinglist.retailer.domain.RetailerArticleSearchResult;
 import se.openshoppinglist.retailer.domain.RetailerSearchResponse;
 
@@ -92,9 +93,15 @@ class CoopRetailerSearchAdapter implements RetailerSearchPort {
     private RetailerArticleSearchResult toSearchResult(CoopSearchItem item) {
         String title = joinNonBlank(item.name(), item.manufacturerName());
         String subtitle = item.packageSizeInformation();
+        String ean = item.ean();
+        String sku = item.id();
+        String canonicalArticleId = RetailerArticleIdentity.canonicalArticleId(ean, null, sku);
         return new RetailerArticleSearchResult(
                 PROVIDER,
                 firstNonBlank(item.ean(), item.id()),
+                canonicalArticleId,
+                ean,
+                sku,
                 title,
                 subtitle,
                 upgradeImageUrl(item.imageUrl()),

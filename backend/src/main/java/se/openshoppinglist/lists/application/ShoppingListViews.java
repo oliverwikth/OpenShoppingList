@@ -116,6 +116,9 @@ public final class ShoppingListViews {
     public record ExternalSnapshotView(
             String provider,
             String articleId,
+            String canonicalArticleId,
+            String ean,
+            String sku,
             String subtitle,
             String imageUrl,
             String category,

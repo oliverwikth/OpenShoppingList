@@ -18,6 +18,7 @@ import org.springframework.web.client.ResourceAccessException;
 import se.openshoppinglist.config.AppProperties;
 import se.openshoppinglist.common.pricing.PricingMetadataService;
 import se.openshoppinglist.retailer.application.RetailerSearchPort;
+import se.openshoppinglist.retailer.domain.RetailerArticleIdentity;
 import se.openshoppinglist.retailer.domain.RetailerArticleSearchResult;
 import se.openshoppinglist.retailer.domain.RetailerSearchResponse;
 
@@ -121,9 +122,16 @@ class WillysRetailerSearchAdapter implements RetailerSearchPort {
     }
 
     private RetailerArticleSearchResult toSearchResult(WillysProduct product) {
+        String ean = firstNonBlank(product.ean(), product.gtin());
+        String sku = firstNonBlank(product.articleNumber(), product.code());
+        String canonicalArticleId = RetailerArticleIdentity.canonicalArticleId(ean, product.articleNumber(), sku);
+
         return new RetailerArticleSearchResult(
                 "willys",
                 product.code(),
+                canonicalArticleId,
+                ean,
+                sku,
                 product.name(),
                 product.productLine2(),
                 product.image() == null ? null : product.image().url(),
@@ -142,6 +150,15 @@ class WillysRetailerSearchAdapter implements RetailerSearchPort {
         );
     }
 
+    private String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
+    }
+
     record WillysSearchResponse(WillysPagination pagination, List<WillysProduct> results) {
     }
 
@@ -157,6 +174,9 @@ class WillysRetailerSearchAdapter implements RetailerSearchPort {
 
     record WillysProduct(
             String code,
+            String articleNumber,
+            String ean,
+            String gtin,
             String name,
             String productLine2,
             BigDecimal priceValue,

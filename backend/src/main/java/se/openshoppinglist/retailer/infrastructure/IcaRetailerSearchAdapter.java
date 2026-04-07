@@ -17,6 +17,7 @@ import se.openshoppinglist.common.pricing.PricingDetails;
 import se.openshoppinglist.common.pricing.PricingMetadataService;
 import se.openshoppinglist.config.AppProperties;
 import se.openshoppinglist.retailer.application.RetailerSearchPort;
+import se.openshoppinglist.retailer.domain.RetailerArticleIdentity;
 import se.openshoppinglist.retailer.domain.RetailerArticleSearchResult;
 import se.openshoppinglist.retailer.domain.RetailerSearchResponse;
 
@@ -109,10 +110,16 @@ class IcaRetailerSearchAdapter implements RetailerSearchPort {
         BigDecimal priceAmount = decimalValue(product.price());
         String category = firstNonBlank(product.mainCategoryName(), product.categoryName());
         String unit = unitFromTitle(title);
+        String ean = product.gtin();
+        String sku = product.consumerItemId();
+        String canonicalArticleId = RetailerArticleIdentity.canonicalArticleId(ean, null, sku);
 
         return new RetailerArticleSearchResult(
                 PROVIDER,
                 firstNonBlank(product.consumerItemId(), firstNonBlank(product.gtin(), title)),
+                canonicalArticleId,
+                ean,
+                sku,
                 title,
                 null,
                 optimizeImageUrl(product.image()),

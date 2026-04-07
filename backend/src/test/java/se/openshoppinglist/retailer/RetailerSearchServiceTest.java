@@ -48,6 +48,9 @@ class RetailerSearchServiceTest {
         RetailerArticleSearchResult result = new RetailerArticleSearchResult(
                 "willys",
                 "100",
+                null,
+                null,
+                null,
                 "Kaffe",
                 "500g",
                 null,
@@ -85,16 +88,16 @@ class RetailerSearchServiceTest {
                         true,
                         null,
                         List.of(
-                                new RetailerArticleSearchResult("willys", "101", "Halloumi budget", "200g", null, null, null, null, null, 0),
-                                new RetailerArticleSearchResult("willys", "202", "Halloumi favorit", "200g", null, null, null, null, null, 0),
-                                new RetailerArticleSearchResult("willys", "303", "Halloumi premium", "200g", null, null, null, null, null, 0)
+                                new RetailerArticleSearchResult("willys", "101", null, null, null, "Halloumi budget", "200g", null, null, null, null, null, 0),
+                                new RetailerArticleSearchResult("willys", "202", null, null, null, "Halloumi favorit", "200g", null, null, null, null, null, 0),
+                                new RetailerArticleSearchResult("willys", "303", null, null, null, "Halloumi premium", "200g", null, null, null, null, null, 0)
                         )
                 )
         );
 
         ShoppingList shoppingList = ShoppingList.create("Veckohandling", ShoppingListProvider.WILLYS, new ActorDisplayName("anna"), FIXED_CLOCK);
         shoppingList.addExternalItem(
-                new ExternalArticleSnapshot("willys", "202", "Halloumi favorit", "200g", null, null, null, null, "{}"),
+                new ExternalArticleSnapshot("willys", "202", null, null, "202", "Halloumi favorit", "200g", null, null, null, null, "{}"),
                 2,
                 new ActorDisplayName("anna"),
                 FIXED_CLOCK
@@ -125,9 +128,9 @@ class RetailerSearchServiceTest {
                         true,
                         null,
                         List.of(
-                                new RetailerArticleSearchResult("willys", "101", "Halloumi budget", "200g", null, null, null, null, null, 0),
-                                new RetailerArticleSearchResult("willys", "202", "Halloumi favorit", "200g", null, null, null, null, null, 0),
-                                new RetailerArticleSearchResult("willys", "303", "Halloumi premium", "200g", null, null, null, null, null, 0)
+                                new RetailerArticleSearchResult("willys", "101", null, null, null, "Halloumi budget", "200g", null, null, null, null, null, 0),
+                                new RetailerArticleSearchResult("willys", "202", null, null, null, "Halloumi favorit", "200g", null, null, null, null, null, 0),
+                                new RetailerArticleSearchResult("willys", "303", null, null, null, "Halloumi premium", "200g", null, null, null, null, null, 0)
                         )
                 )
         );
@@ -143,7 +146,7 @@ class RetailerSearchServiceTest {
                 shoppingList.getItems().getFirst().getId(),
                 "shopping-list-item.checked",
                 "anna",
-                checkedPayload("Halloumi favorit", 1, null, null),
+                checkedPayload("Halloumi favorit", 1, null, null, null, null, null),
                 FIXED_CLOCK.instant()
         );
         RetailerSearchService retailerSearchService = new RetailerSearchService(
@@ -158,6 +161,195 @@ class RetailerSearchServiceTest {
                 .extracting(RetailerArticleSearchResult::articleId)
                 .containsExactly("202", "101", "303");
         assertThat(response.results().getFirst().purchaseCount()).isEqualTo(1);
+    }
+
+    @Test
+    void ranksCanonicalMatchesAcrossProviders() {
+        RetailerSearchPort lidlPort = stubPort(
+                "lidl",
+                (query, page) -> new RetailerSearchResponse(
+                        "lidl",
+                        query,
+                        page,
+                        1,
+                        2,
+                        false,
+                        true,
+                        null,
+                        List.of(
+                                new RetailerArticleSearchResult(
+                                        "lidl",
+                                        "lidl-77",
+                                        "ean:7310861081006",
+                                        "7310861081006",
+                                        "lidl-77",
+                                        "Bregott Mellan",
+                                        "500g",
+                                        null,
+                                        null,
+                                        null,
+                                        null,
+                                        null,
+                                        0
+                                ),
+                                new RetailerArticleSearchResult(
+                                        "lidl",
+                                        "lidl-88",
+                                        null,
+                                        null,
+                                        null,
+                                        "Smör osaltat",
+                                        "500g",
+                                        null,
+                                        null,
+                                        null,
+                                        null,
+                                        null,
+                                        0
+                                )
+                        )
+                )
+        );
+
+        ShoppingList willysList = ShoppingList.create("Willys", ShoppingListProvider.WILLYS, new ActorDisplayName("anna"), FIXED_CLOCK);
+        willysList.addExternalItem(
+                new ExternalArticleSnapshot(
+                        "willys",
+                        "w-123",
+                        "ean:7310861081006",
+                        "7310861081006",
+                        "w-123",
+                        "Bregott Mellan",
+                        "500g",
+                        null,
+                        null,
+                        null,
+                        null,
+                        "{}"
+                ),
+                3,
+                new ActorDisplayName("anna"),
+                FIXED_CLOCK
+        );
+        willysList.checkItem(willysList.getItems().getFirst().getId(), new ActorDisplayName("anna"), FIXED_CLOCK);
+
+        ShoppingList lidlList = ShoppingList.create("Lidl", ShoppingListProvider.LIDL, new ActorDisplayName("anna"), FIXED_CLOCK);
+
+        ShoppingListRepository repository = repositoryWith(willysList, lidlList);
+        RetailerSearchService retailerSearchService = new RetailerSearchService(
+                List.of(lidlPort),
+                purchaseHistoryService(repository),
+                repository
+        );
+
+        RetailerSearchResponse response = retailerSearchService.search(lidlList.getId(), "smör", 0);
+
+        assertThat(response.results())
+                .extracting(RetailerArticleSearchResult::articleId)
+                .containsExactly("lidl-77", "lidl-88");
+        assertThat(response.results().getFirst().purchaseCount()).isEqualTo(3);
+    }
+
+    @Test
+    void ranksKeywordMatchesAcrossProvidersWhenIdentityIsMissing() {
+        RetailerSearchPort lidlPort = stubPort(
+                "lidl",
+                (query, page) -> new RetailerSearchResponse(
+                        "lidl",
+                        query,
+                        page,
+                        1,
+                        3,
+                        false,
+                        true,
+                        null,
+                        List.of(
+                                new RetailerArticleSearchResult(
+                                        "lidl",
+                                        "lidl-a",
+                                        null,
+                                        null,
+                                        null,
+                                        "Bredbart smör & raps mellan",
+                                        "500g",
+                                        null,
+                                        null,
+                                        null,
+                                        null,
+                                        null,
+                                        0
+                                ),
+                                new RetailerArticleSearchResult(
+                                        "lidl",
+                                        "lidl-b",
+                                        null,
+                                        null,
+                                        null,
+                                        "Svenskt smör",
+                                        "500g",
+                                        null,
+                                        null,
+                                        null,
+                                        null,
+                                        null,
+                                        0
+                                ),
+                                new RetailerArticleSearchResult(
+                                        "lidl",
+                                        "lidl-c",
+                                        null,
+                                        null,
+                                        null,
+                                        "Popcorn smörsmak",
+                                        "3-pack",
+                                        null,
+                                        null,
+                                        null,
+                                        null,
+                                        null,
+                                        0
+                                )
+                        )
+                )
+        );
+
+        ShoppingList willysList = ShoppingList.create("Willys", ShoppingListProvider.WILLYS, new ActorDisplayName("anna"), FIXED_CLOCK);
+        willysList.addExternalItem(
+                new ExternalArticleSnapshot(
+                        "willys",
+                        "w-456",
+                        null,
+                        null,
+                        null,
+                        "Normalsaltat Smör & Rapsolja 75%",
+                        "500g",
+                        null,
+                        null,
+                        null,
+                        null,
+                        "{}"
+                ),
+                2,
+                new ActorDisplayName("anna"),
+                FIXED_CLOCK
+        );
+        willysList.checkItem(willysList.getItems().getFirst().getId(), new ActorDisplayName("anna"), FIXED_CLOCK);
+
+        ShoppingList lidlList = ShoppingList.create("Lidl", ShoppingListProvider.LIDL, new ActorDisplayName("anna"), FIXED_CLOCK);
+
+        ShoppingListRepository repository = repositoryWith(willysList, lidlList);
+        RetailerSearchService retailerSearchService = new RetailerSearchService(
+                List.of(lidlPort),
+                purchaseHistoryService(repository),
+                repository
+        );
+
+        RetailerSearchResponse response = retailerSearchService.search(lidlList.getId(), "smör", 0);
+
+        assertThat(response.results())
+                .extracting(RetailerArticleSearchResult::articleId)
+                .containsExactly("lidl-a", "lidl-b", "lidl-c");
+        assertThat(response.results().getFirst().purchaseCount()).isGreaterThan(0);
     }
 
     @Test
@@ -228,14 +420,25 @@ class RetailerSearchServiceTest {
         );
     }
 
-    private String checkedPayload(String title, Integer quantity, String provider, String articleId) {
+    private String checkedPayload(
+            String title,
+            Integer quantity,
+            String provider,
+            String articleId,
+            String canonicalArticleId,
+            String ean,
+            String sku
+    ) {
         try {
             return OBJECT_MAPPER.writeValueAsString(new CheckedItemActivityPayload(
                     "shopping-list-item.checked",
                     title,
                     quantity,
                     provider,
-                    articleId
+                    articleId,
+                    canonicalArticleId,
+                    ean,
+                    sku
             ));
         } catch (Exception exception) {
             throw new RuntimeException(exception);

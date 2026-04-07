@@ -21,11 +21,13 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import se.openshoppinglist.common.catalog.ArticleTextSignals;
 import se.openshoppinglist.common.pricing.PricingDetails;
 import se.openshoppinglist.common.pricing.PricingMetadataService;
 import se.openshoppinglist.lists.domain.ShoppingList;
 import se.openshoppinglist.lists.domain.ShoppingListItem;
 import se.openshoppinglist.lists.domain.ShoppingListRepository;
+import se.openshoppinglist.retailer.domain.RetailerArticleIdentity;
 
 @Service
 public class ShoppingStatsQueryService {
@@ -95,6 +97,11 @@ public class ShoppingStatsQueryService {
                 .map(item -> new CheckedItemSnapshot(
                         shoppingList.getId(),
                         item.getTitle(),
+                        item.getSourceProvider(),
+                        item.getSourceArticleId(),
+                        item.getSourceCanonicalArticleId(),
+                        item.getSourceEan(),
+                        item.getSourceSku(),
                         item.getQuantity(),
                         item.getCheckedAt(),
                         item.getSourcePriceAmount(),
@@ -170,13 +177,15 @@ public class ShoppingStatsQueryService {
     private List<ShoppingListViews.TopPurchasedItemView> topItemsFor(List<CheckedItemSnapshot> items) {
         Map<String, ItemAggregate> aggregates = new LinkedHashMap<>();
         for (CheckedItemSnapshot item : items) {
-            aggregates.compute(item.title(), (title, current) -> {
+            String key = topItemKey(item);
+            aggregates.compute(key, (ignored, current) -> {
                 BigDecimal spentAmount = pricedAmount(item);
                 if (current == null) {
-                    return new ItemAggregate(item.quantity(), spentAmount, item.imageUrl());
+                    return new ItemAggregate(item.title(), item.quantity(), spentAmount, item.imageUrl());
                 }
                 String imageUrl = current.imageUrl() != null && !current.imageUrl().isBlank() ? current.imageUrl() : item.imageUrl();
-                return new ItemAggregate(current.quantity() + item.quantity(), current.spentAmount().add(spentAmount), imageUrl);
+                String title = current.title();
+                return new ItemAggregate(title, current.quantity() + item.quantity(), current.spentAmount().add(spentAmount), imageUrl);
             });
         }
 
@@ -187,12 +196,35 @@ public class ShoppingStatsQueryService {
                         .thenComparing(Map.Entry::getKey))
                 .limit(10)
                 .map(entry -> new ShoppingListViews.TopPurchasedItemView(
-                        entry.getKey(),
+                        entry.getValue().title(),
                         entry.getValue().quantity(),
                         entry.getValue().spentAmount().setScale(2, RoundingMode.HALF_UP),
                         entry.getValue().imageUrl()
                 ))
                 .toList();
+    }
+
+    private String topItemKey(CheckedItemSnapshot item) {
+        String identityKey = RetailerArticleIdentity.identityKeys(
+                        item.provider(),
+                        item.articleId(),
+                        item.canonicalArticleId(),
+                        item.ean(),
+                        item.sku()
+                ).stream()
+                .filter(key -> !key.startsWith("provider:"))
+                .findFirst()
+                .orElse("");
+        if (!identityKey.isBlank()) {
+            return identityKey;
+        }
+
+        String semanticTitleKey = ArticleTextSignals.semanticTitleKey(item.title());
+        if (!semanticTitleKey.isBlank()) {
+            return "title:" + semanticTitleKey;
+        }
+
+        return "title:" + item.title();
     }
 
     private String preferredCurrency(List<CheckedItemSnapshot> currentItems, List<CheckedItemSnapshot> previousItems) {
@@ -224,6 +256,11 @@ public class ShoppingStatsQueryService {
     private record CheckedItemSnapshot(
             UUID listId,
             String title,
+            String provider,
+            String articleId,
+            String canonicalArticleId,
+            String ean,
+            String sku,
             int quantity,
             Instant checkedAt,
             BigDecimal priceAmount,
@@ -242,7 +279,7 @@ public class ShoppingStatsQueryService {
     ) {
     }
 
-    private record ItemAggregate(int quantity, BigDecimal spentAmount, String imageUrl) {
+    private record ItemAggregate(String title, int quantity, BigDecimal spentAmount, String imageUrl) {
     }
 
     private record Window(Instant start, Instant end, String label) {

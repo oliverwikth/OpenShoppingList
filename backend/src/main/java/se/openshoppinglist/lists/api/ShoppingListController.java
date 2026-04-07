@@ -192,6 +192,9 @@ public class ShoppingListController {
         ExternalArticleSnapshot snapshot = new ExternalArticleSnapshot(
                 request.provider(),
                 request.articleId(),
+                request.canonicalArticleId(),
+                request.ean(),
+                request.sku(),
                 request.title(),
                 request.subtitle(),
                 request.imageUrl(),
@@ -303,6 +306,9 @@ public class ShoppingListController {
     public record AddExternalItemRequest(
             @NotBlank String provider,
             @NotBlank String articleId,
+            String canonicalArticleId,
+            String ean,
+            String sku,
             @NotBlank String title,
             String subtitle,
             String imageUrl,

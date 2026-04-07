@@ -7,11 +7,14 @@ public record CheckedItemActivityPayload(
         String title,
         Integer quantity,
         String provider,
-        String articleId
+        String articleId,
+        String canonicalArticleId,
+        String ean,
+        String sku
 ) {
 
     public static CheckedItemActivityPayload generic(String eventType) {
-        return new CheckedItemActivityPayload(eventType, null, null, null, null);
+        return new CheckedItemActivityPayload(eventType, null, null, null, null, null, null, null);
     }
 
     public static CheckedItemActivityPayload checked(ShoppingListItem item) {
@@ -20,7 +23,10 @@ public record CheckedItemActivityPayload(
                 item.getTitle(),
                 item.getQuantity(),
                 item.getSourceProvider(),
-                item.getSourceArticleId()
+                item.getSourceArticleId(),
+                item.getSourceCanonicalArticleId(),
+                item.getSourceEan(),
+                item.getSourceSku()
         );
     }
 

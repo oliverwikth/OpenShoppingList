@@ -33,6 +33,9 @@ public class RetailerArticleDetailsService {
         return new ExternalArticleSnapshot(
                 snapshot.provider(),
                 snapshot.articleId(),
+                snapshot.canonicalArticleId(),
+                snapshot.ean(),
+                snapshot.sku(),
                 snapshot.title(),
                 snapshot.subtitle(),
                 snapshot.imageUrl(),

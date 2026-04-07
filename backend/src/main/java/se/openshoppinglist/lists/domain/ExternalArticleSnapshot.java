@@ -5,6 +5,9 @@ import java.math.BigDecimal;
 public record ExternalArticleSnapshot(
         String provider,
         String articleId,
+        String canonicalArticleId,
+        String ean,
+        String sku,
         String title,
         String subtitle,
         String imageUrl,

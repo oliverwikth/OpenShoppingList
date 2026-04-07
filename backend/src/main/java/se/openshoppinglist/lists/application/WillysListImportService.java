@@ -73,6 +73,9 @@ public class WillysListImportService {
                         new ExternalArticleSnapshot(
                                 "willys",
                                 requireText(product.code(), "Willys product code is required for product entries."),
+                                null,
+                                null,
+                                requireText(product.code(), "Willys product code is required for product entries."),
                                 requireText(product.name(), "Willys product name is required for product entries."),
                                 blankToNull(product.productLine2()),
                                 product.imageUrl(),

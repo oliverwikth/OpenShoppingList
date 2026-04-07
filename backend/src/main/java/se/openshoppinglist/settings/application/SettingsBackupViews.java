@@ -55,6 +55,9 @@ public final class SettingsBackupViews {
     public record BackupExternalSnapshotView(
             String provider,
             String articleId,
+            String canonicalArticleId,
+            String ean,
+            String sku,
             String subtitle,
             String imageUrl,
             String category,

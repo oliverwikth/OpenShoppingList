@@ -118,6 +118,9 @@ public class ShoppingListQueryService {
                 : new ExternalSnapshotView(
                         item.getSourceProvider(),
                         item.getSourceArticleId(),
+                        item.getSourceCanonicalArticleId(),
+                        item.getSourceEan(),
+                        item.getSourceSku(),
                         item.getSourceSubtitle(),
                         item.getSourceImageUrl(),
                         item.getSourceCategory(),

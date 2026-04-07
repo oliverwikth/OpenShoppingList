@@ -114,6 +114,9 @@ public class SettingsBackupService {
                         : new SettingsBackupViews.BackupExternalSnapshotView(
                                 snapshot.provider(),
                                 snapshot.articleId(),
+                                snapshot.canonicalArticleId(),
+                                snapshot.ean(),
+                                snapshot.sku(),
                                 snapshot.subtitle(),
                                 snapshot.imageUrl(),
                                 snapshot.category(),
@@ -152,6 +155,9 @@ public class SettingsBackupService {
         ExternalArticleSnapshot snapshot = new ExternalArticleSnapshot(
                 snapshotView.provider(),
                 snapshotView.articleId(),
+                snapshotView.canonicalArticleId(),
+                snapshotView.ean(),
+                snapshotView.sku(),
                 itemView.title(),
                 snapshotView.subtitle(),
                 snapshotView.imageUrl(),

@@ -72,6 +72,15 @@ public class ShoppingListItem {
     @Column(name = "source_article_id", length = 120)
     private String sourceArticleId;
 
+    @Column(name = "source_canonical_article_id", length = 160)
+    private String sourceCanonicalArticleId;
+
+    @Column(name = "source_ean", length = 32)
+    private String sourceEan;
+
+    @Column(name = "source_sku", length = 120)
+    private String sourceSku;
+
     @Column(name = "source_image_url")
     private String sourceImageUrl;
 
@@ -161,6 +170,9 @@ public class ShoppingListItem {
         item.quantity = normalizeQuantity(quantity);
         item.sourceProvider = snapshot.provider();
         item.sourceArticleId = snapshot.articleId();
+        item.sourceCanonicalArticleId = snapshot.canonicalArticleId();
+        item.sourceEan = snapshot.ean();
+        item.sourceSku = snapshot.sku();
         item.sourceImageUrl = snapshot.imageUrl();
         item.sourceCategory = snapshot.category();
         item.sourcePriceAmount = snapshot.priceAmount();
@@ -241,6 +253,9 @@ public class ShoppingListItem {
         item.quantity = normalizeQuantity(quantity);
         item.sourceProvider = snapshot.provider();
         item.sourceArticleId = snapshot.articleId();
+        item.sourceCanonicalArticleId = snapshot.canonicalArticleId();
+        item.sourceEan = snapshot.ean();
+        item.sourceSku = snapshot.sku();
         item.sourceImageUrl = snapshot.imageUrl();
         item.sourceCategory = snapshot.category();
         item.sourcePriceAmount = snapshot.priceAmount();
@@ -330,8 +345,16 @@ public class ShoppingListItem {
     }
 
     boolean matchesExternal(ExternalArticleSnapshot snapshot) {
-        return itemType == ShoppingListItemType.EXTERNAL_ARTICLE
-                && normalizeValue(sourceProvider).equals(normalizeValue(snapshot.provider()))
+        if (itemType != ShoppingListItemType.EXTERNAL_ARTICLE) {
+            return false;
+        }
+
+        String currentCanonicalArticleId = normalizeValue(sourceCanonicalArticleId);
+        String incomingCanonicalArticleId = normalizeValue(snapshot.canonicalArticleId());
+        if (!currentCanonicalArticleId.isEmpty() && currentCanonicalArticleId.equals(incomingCanonicalArticleId)) {
+            return true;
+        }
+        return normalizeValue(sourceProvider).equals(normalizeValue(snapshot.provider()))
                 && normalizeValue(sourceArticleId).equals(normalizeValue(snapshot.articleId()));
     }
 
@@ -346,6 +369,9 @@ public class ShoppingListItem {
         return new ExternalArticleSnapshot(
                 sourceProvider,
                 sourceArticleId,
+                sourceCanonicalArticleId,
+                sourceEan,
+                sourceSku,
                 title,
                 sourceSubtitle,
                 sourceImageUrl,
@@ -418,6 +444,18 @@ public class ShoppingListItem {
 
     public String getSourceArticleId() {
         return sourceArticleId;
+    }
+
+    public String getSourceCanonicalArticleId() {
+        return sourceCanonicalArticleId;
+    }
+
+    public String getSourceEan() {
+        return sourceEan;
+    }
+
+    public String getSourceSku() {
+        return sourceSku;
     }
 
     public String getSourceImageUrl() {
