@@ -34,6 +34,9 @@ export interface PricingDetails {
 export interface ExternalSnapshot {
   provider: string
   articleId: string
+  canonicalArticleId?: string | null
+  ean?: string | null
+  sku?: string | null
   subtitle: string | null
   imageUrl: string | null
   category: string | null
@@ -123,6 +126,9 @@ export interface ShoppingStats {
 export interface RetailerSearchResult {
   provider: string
   articleId: string
+  canonicalArticleId?: string | null
+  ean?: string | null
+  sku?: string | null
   title: string
   subtitle: string | null
   imageUrl: string | null
@@ -199,6 +205,9 @@ export interface SettingsSnapshot {
 export interface SettingsBackupExternalSnapshot {
   provider: string
   articleId: string
+  canonicalArticleId?: string | null
+  ean?: string | null
+  sku?: string | null
   subtitle: string | null
   imageUrl: string | null
   category: string | null

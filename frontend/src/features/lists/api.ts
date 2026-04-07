@@ -64,6 +64,9 @@ export function addExternalItem(actorName: string, listId: string, result: Retai
     body: {
       provider: result.provider,
       articleId: result.articleId,
+      canonicalArticleId: result.canonicalArticleId,
+      ean: result.ean,
+      sku: result.sku,
       title: result.title,
       subtitle: result.subtitle,
       imageUrl: result.imageUrl,

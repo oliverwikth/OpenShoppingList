@@ -21,10 +21,10 @@ const PAGE_SIZE_OPTIONS: Array<{ value: ListPageSize; label: string }> = [
 type ProviderPickerOption = { value: ShoppingListProvider; label: string; logoSrc: string }
 
 const LIST_PROVIDER_OPTIONS: Array<ProviderPickerOption> = [
-  { value: 'willys', label: 'Willys', logoSrc: '/willys-logo.svg' },
-  { value: 'lidl', label: 'Lidl', logoSrc: '/lidl-logo.svg' },
-  { value: 'ica', label: 'ICA', logoSrc: '/ica-logo.png' },
-  { value: 'coop', label: 'Coop', logoSrc: '/coop-logo.png' },
+  { value: 'willys', label: 'Willys', logoSrc: '/provider-logos/WILLYS.png' },
+  { value: 'lidl', label: 'Lidl', logoSrc: '/provider-logos/LIDL.png' },
+  { value: 'ica', label: 'ICA', logoSrc: '/provider-logos/ICA.png' },
+  { value: 'coop', label: 'Coop', logoSrc: '/provider-logos/COOP.png' },
 ]
 
 function providerLogo(optionProvider: ShoppingListProvider) {
@@ -302,7 +302,7 @@ export function ListsOverviewPage() {
           role="dialog"
           style={{ '--keyboard-inset': `${keyboardInset}px` } as CSSProperties}
         >
-          <form className="modal-card inline-form" onSubmit={handleCreateList}>
+          <form className="modal-card modal-card--create inline-form" onSubmit={handleCreateList}>
             <div className="modal-header">
               <h2>Ny lista</h2>
               <button aria-label="Stäng" className="modal-close" onClick={closeCreateDialog} type="button">
@@ -319,7 +319,7 @@ export function ListsOverviewPage() {
             />
             <div className="provider-picker">
               <span className="provider-picker__label">Butik</span>
-              <div aria-label="Butik" className="provider-picker__options" role="radiogroup">
+              <div aria-label="Butik" className="provider-picker__options provider-picker__options--scroll" role="radiogroup">
                 {LIST_PROVIDER_OPTIONS.map((option) => {
                   const isSelected = option.value === newListProvider
                   return (
