@@ -36,7 +36,7 @@ public record AppProperties(
             String searchPath,
             String locale,
             String assortment,
-            String version,
+            String appStoreId,
             Duration connectTimeout,
             Duration readTimeout,
             int maxResults

@@ -24,6 +24,13 @@ class RestClientConfiguration {
     }
 
     @Bean
+    @Qualifier("lidlRestClient")
+    RestClient lidlRestClient(AppProperties properties) {
+        AppProperties.LidlProperties lidl = properties.retailer().lidl();
+        return buildRestClient(lidl.baseUrl(), lidl.connectTimeout(), lidl.readTimeout());
+    }
+
+    @Bean
     @Qualifier("icaSiteRestClient")
     RestClient icaSiteRestClient(AppProperties properties) {
         AppProperties.IcaProperties ica = properties.retailer().ica();

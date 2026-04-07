@@ -52,14 +52,14 @@ app:
       read-timeout: 6s
       max-results: 12
     lidl:
-      base-url: https://www.lidl.se
-      search-path: /q/api/search
-      locale: sv_SE
+      base-url: https://product-catalog.lidlplus.com
+      search-path: /api/app/v1/{country}/store/{storeId}/search
+      locale: sv
       assortment: SE
-      version: v2.0.0
+      app-store-id: SE0100
       connect-timeout: 3s
       read-timeout: 6s
-      max-results: 12
+      max-results: 36
     coop:
       base-url: https://external.api.coop.se
       search-path: /personalization/search/products
